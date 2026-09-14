@@ -98,6 +98,11 @@
   .tag.ea-alta{color:#B03A2E;border-color:#F0CCC8;background:#FDF2F1}
   .rx-desc{font-size:13.5px;color:var(--ink-soft);line-height:1.45}
   .modal-fechar{margin-top:6px;width:100%}
+  .btn-qr{font-size:14.5px;font-weight:650;padding:9px 16px}
+  .modal-qr{max-width:520px;text-align:center}
+  .qr-img{width:min(100%,56vh);margin:0 auto 10px}
+  .qr-img svg{display:block;width:100%;height:auto}
+  .qr-url{font-size:15px;font-weight:650;word-break:break-all;margin-bottom:10px}
 
   @media (prefers-reduced-motion: reduce){ .pressao-fill{transition:none} }
 </style>
@@ -109,6 +114,7 @@
   <div class="eq-linha">
     <h1 class="equacao" id="eqTitulo"></h1>
     <button class="btn-trocar" id="btnTrocar">Trocar reação</button>
+    <button class="btn-qr" id="btnQr">QR code para os alunos</button>
   </div>
   <p class="subeq" id="rxSub"></p>
 </header>
@@ -176,6 +182,17 @@
     <p class="sub">Compare tipos de ligação e energias de ativação diferentes — repare quanta temperatura cada reação exige para acontecer.</p>
     <div id="listaRx"></div>
     <button class="modal-fechar" id="btnFecharModal">Fechar</button>
+  </div>
+</div>
+
+<!-- QR code para os alunos -->
+<div class="modal-fundo" id="modalQr" role="dialog" aria-modal="true" aria-labelledby="qrTitulo">
+  <div class="modal modal-qr">
+    <h3 id="qrTitulo">Abra o simulador no celular</h3>
+    <p class="sub">Aponte a câmera do celular para o código.</p>
+    <div class="qr-img" role="img" aria-label="QR code do endereço do simulador"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 41 41" shape-rendering="crispEdges"><path fill="#FFFFFF" d="M0 0h41v41H0z"/><path stroke="#0F2A33" d="M4 4.5h7m5 0h3m1 0h1m1 0h3m1 0h2m2 0h7M4 5.5h1m5 0h1m6 0h3m2 0h1m2 0h2m1 0h1m1 0h1m5 0h1M4 6.5h1m1 0h3m1 0h1m1 0h1m4 0h1m1 0h1m3 0h1m1 0h4m1 0h1m1 0h3m1 0h1M4 7.5h1m1 0h3m1 0h1m1 0h1m1 0h1m3 0h1m2 0h1m2 0h1m1 0h1m1 0h1m1 0h1m1 0h3m1 0h1M4 8.5h1m1 0h3m1 0h1m1 0h1m2 0h1m3 0h1m1 0h1m1 0h6m1 0h1m1 0h3m1 0h1M4 9.5h1m5 0h1m1 0h2m2 0h1m1 0h4m2 0h1m3 0h1m1 0h1m5 0h1M4 10.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M12 11.5h1m1 0h2m2 0h1m1 0h1m3 0h5M4 12.5h1m1 0h5m3 0h1m2 0h2m2 0h1m1 0h1m2 0h1m3 0h5M4 13.5h1m4 0h1m2 0h1m1 0h1m1 0h1m3 0h1m1 0h4m1 0h1m2 0h2m1 0h2m1 0h1M6 14.5h2m2 0h1m5 0h1m2 0h1m4 0h1m4 0h1m2 0h1m1 0h2M5 15.5h2m2 0h1m5 0h2m1 0h3m3 0h2m1 0h1m1 0h1m2 0h4M5 16.5h1m2 0h1m1 0h3m2 0h2m2 0h1m1 0h1m1 0h1m2 0h2m1 0h1m2 0h2m2 0h1M5 17.5h2m1 0h1m2 0h3m2 0h1m1 0h1m2 0h3m3 0h1m2 0h1m2 0h1m1 0h2M4 18.5h1m4 0h4m3 0h1m2 0h3m2 0h2m3 0h2m2 0h1m1 0h1M4 19.5h2m1 0h2m2 0h1m1 0h1m3 0h3m3 0h5m1 0h2m1 0h1m1 0h1M5 20.5h1m1 0h5m1 0h2m1 0h2m1 0h3m1 0h1m2 0h4m1 0h2m3 0h1M4 21.5h2m6 0h1m3 0h3m1 0h2m1 0h1m1 0h1m1 0h1m1 0h3m1 0h2m1 0h1M5 22.5h2m2 0h6m1 0h2m1 0h2m1 0h1m2 0h2m1 0h5m1 0h2M7 23.5h2m2 0h2m4 0h1m1 0h1m3 0h4m4 0h4m1 0h1M6 24.5h1m3 0h1m2 0h3m1 0h1m3 0h1m1 0h1m2 0h1m1 0h2m1 0h3m1 0h2M4 25.5h5m2 0h3m1 0h1m1 0h1m2 0h1m1 0h4m1 0h1m2 0h1m2 0h1m2 0h1M4 26.5h1m2 0h2m1 0h2m2 0h4m1 0h2m1 0h1m1 0h1m3 0h2m3 0h1m1 0h1M4 27.5h1m2 0h3m3 0h1m1 0h2m5 0h1m2 0h1m4 0h5M4 28.5h1m4 0h2m1 0h2m2 0h2m1 0h1m1 0h2m3 0h1m1 0h6m1 0h2M12 29.5h2m2 0h2m2 0h6m1 0h2m3 0h1m1 0h1m1 0h1M4 30.5h7m2 0h1m5 0h2m3 0h2m1 0h2m1 0h1m1 0h1m1 0h1M4 31.5h1m5 0h1m1 0h3m1 0h1m1 0h1m1 0h1m3 0h5m3 0h3m1 0h1M4 32.5h1m1 0h3m1 0h1m1 0h1m2 0h1m3 0h1m1 0h1m4 0h1m1 0h6M4 33.5h1m1 0h3m1 0h1m1 0h2m4 0h1m1 0h5m2 0h3m2 0h1m1 0h3M4 34.5h1m1 0h3m1 0h1m1 0h1m2 0h1m1 0h1m1 0h3m2 0h2m4 0h2m1 0h1M4 35.5h1m5 0h1m2 0h3m1 0h1m1 0h1m2 0h2m1 0h2m5 0h3M4 36.5h7m1 0h1m3 0h1m1 0h1m2 0h1m4 0h4m1 0h1m3 0h1"/></svg></div>
+    <p class="qr-url">vitorsibien-boop.github.io/simulador-reacao-quimica</p>
+    <button class="modal-fechar" id="btnFecharQr">Fechar</button>
   </div>
 </div>
 
@@ -357,7 +374,12 @@
   el('btnTrocar').addEventListener('click', abrirModal);
   el('btnFecharModal').addEventListener('click', fecharModal);
   modal.addEventListener('click', e=>{ if(e.target===modal) fecharModal(); });
-  document.addEventListener('keydown', e=>{ if(e.key==='Escape') fecharModal(); });
+  const modalQr = el('modalQr');
+  const fecharQr = ()=>modalQr.classList.remove('aberto');
+  el('btnQr').addEventListener('click', ()=>modalQr.classList.add('aberto'));
+  el('btnFecharQr').addEventListener('click', fecharQr);
+  modalQr.addEventListener('click', e=>{ if(e.target===modalQr) fecharQr(); });
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ fecharModal(); fecharQr(); } });
   el('listaRx').addEventListener('click', e=>{
     const card = e.target.closest('.rx-card');
     if(!card) return;
