@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reação Visível — Simulador didático</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F3F7F8; --ink:#0F2A33; --ink-soft:#4A6570;
+    --oxy:#D5382B; --hyd:#CBD8DE; --hyd-line:#5E7681; --water:#1C7FA6;
+    --line:#D5E0E4; --card:#FFFFFF;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--paper);color:var(--ink);
+    font-family:"Bricolage Grotesque",system-ui,-apple-system,sans-serif;}
+  body{padding:28px clamp(16px,4vw,48px) 40px;}
+
+  header{max-width:1180px;margin:0 auto 22px}
+  .curso{color:var(--ink-soft);font-size:14px;font-weight:500;margin-bottom:14px}
+  .eq-linha{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .equacao{font-size:clamp(28px,4.8vw,50px);font-weight:750;letter-spacing:-0.02em;line-height:1.05}
+  .equacao .seta{color:var(--ink-soft);font-weight:300;margin:0 .18em}
+  .btn-trocar{font-family:inherit;font-size:14.5px;font-weight:650;color:#fff;
+    background:var(--ink);border:1.5px solid var(--ink);border-radius:8px;padding:9px 16px;cursor:pointer}
+  .btn-trocar:hover{background:var(--ink-soft);border-color:var(--ink-soft)}
+  .subeq{margin-top:8px;font-size:15px;color:var(--ink-soft);max-width:68ch}
+  .subeq b{font-weight:700;color:var(--ink)}
+
+  main{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1.9fr) minmax(280px,1fr);gap:18px}
+  @media (max-width:880px){main{grid-template-columns:1fr}}
+
+  .palco{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+  #caixa{display:block;width:100%;height:auto;background:linear-gradient(180deg,#FBFDFE 0%,#EFF5F7 100%)}
+  .palco-rodape{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-top:1px solid var(--line);font-size:13.5px;color:var(--ink-soft);flex-wrap:wrap}
+  .legenda{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .legenda span{display:inline-flex;align-items:center;gap:6px}
+  .bolinha{width:11px;height:11px;border-radius:50%;display:inline-block}
+  button{font-family:inherit;font-size:14px;font-weight:600;color:var(--ink);
+    background:var(--card);border:1.5px solid var(--ink);border-radius:8px;padding:7px 14px;cursor:pointer}
+  button:hover{background:var(--ink);color:#fff}
+  button:focus-visible,input:focus-visible{outline:3px solid var(--water);outline-offset:2px}
+
+  .painel{display:flex;flex-direction:column;gap:14px}
+  .bloco{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .bloco h2{font-size:15px;font-weight:700;margin-bottom:10px}
+  .controle{margin-bottom:14px}
+  .controle:last-child{margin-bottom:2px}
+  .controle .linha{display:flex;justify-content:space-between;align-items:baseline;font-size:14px;margin-bottom:5px}
+  .controle .valor{font-weight:750;font-size:17px;font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--ink);height:22px}
+  #tempSlider{accent-color:var(--oxy)}
+  .ea-nota{font-size:12.5px;color:var(--ink-soft);margin-top:2px}
+
+  .contadores{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:left}
+  .cont{border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+  .cont .n{font-size:24px;font-weight:750;font-variant-numeric:tabular-nums;line-height:1.1}
+  .cont .rot{font-size:12.5px;color:var(--ink-soft)}
+
+  .previsao{font-size:14px;line-height:1.5;color:var(--ink);border-left:3px solid var(--water);padding-left:10px;margin-top:12px}
+  .previsao strong{font-weight:750}
+
+  .pressao-barra{height:10px;border-radius:6px;background:var(--paper);border:1px solid var(--line);overflow:hidden;margin-top:6px}
+  .pressao-fill{height:100%;width:20%;background:var(--ink);transition:width .3s}
+
+  #grafico{width:100%;height:64px;display:block;margin-top:4px}
+  .graf-rot{font-size:12.5px;color:var(--ink-soft)}
+
+  .johnstone{max-width:1180px;margin:20px auto 0;display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media (max-width:880px){.johnstone{grid-template-columns:1fr}}
+  .niv{border-top:2.5px solid var(--ink);padding-top:10px;font-size:14px;line-height:1.5}
+  .niv b{display:block;font-size:15px;margin-bottom:3px}
+  .niv.ativo{border-top-color:var(--water)}
+  .niv.ativo b{color:var(--water)}
+
+  .assinatura{max-width:1180px;margin:26px auto 0;font-size:13.5px;color:var(--ink-soft);
+    border-top:1px solid var(--line);padding-top:12px;line-height:1.6}
+
+  /* ---------- modal ---------- */
+  .modal-fundo{position:fixed;inset:0;background:rgba(15,42,51,.45);display:none;
+    align-items:flex-start;justify-content:center;padding:5vh 16px;z-index:50;overflow-y:auto}
+  .modal-fundo.aberto{display:flex}
+  .modal{background:var(--card);border-radius:16px;max-width:640px;width:100%;padding:22px 22px 16px}
+  .modal h3{font-size:20px;font-weight:750;margin-bottom:4px}
+  .modal .sub{font-size:14px;color:var(--ink-soft);margin-bottom:16px}
+  .rx-card{width:100%;text-align:left;display:block;border:1.5px solid var(--line);border-radius:12px;
+    padding:13px 15px;margin-bottom:10px;background:var(--card);cursor:pointer;color:var(--ink)}
+  .rx-card:hover{border-color:var(--ink);background:#FAFCFD;color:var(--ink)}
+  .rx-card.atual{border-color:var(--water);background:#F2F9FC}
+  .rx-eq{font-size:19px;font-weight:750;letter-spacing:-0.01em}
+  .rx-meta{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px}
+  .tag{font-size:12px;font-weight:650;border-radius:6px;padding:2px 8px;border:1px solid var(--line);color:var(--ink-soft)}
+  .tag.ionica{color:#7A4FB6;border-color:#D9C9F0;background:#F7F2FD}
+  .tag.covalente{color:#1C7FA6;border-color:#C4E0EC;background:#F0F8FB}
+  .tag.ea-baixa{color:#2E7D46;border-color:#C8E4D0;background:#F1FAF4}
+  .tag.ea-media{color:#9A6A15;border-color:#EBD9B4;background:#FCF7EC}
+  .tag.ea-alta{color:#B03A2E;border-color:#F0CCC8;background:#FDF2F1}
+  .rx-desc{font-size:13.5px;color:var(--ink-soft);line-height:1.45}
+  .modal-fechar{margin-top:6px;width:100%}
+
+  @media (prefers-reduced-motion: reduce){ .pressao-fill{transition:none} }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="curso">Instrumentação no Ensino de Ciências · proposta didática de Química</p>
+  <div class="eq-linha">
+    <h1 class="equacao" id="eqTitulo"></h1>
+    <button class="btn-trocar" id="btnTrocar">Trocar reação</button>
+  </div>
+  <p class="subeq" id="rxSub"></p>
+</header>
+
+<main>
+  <section class="palco" aria-label="Simulação de partículas">
+    <canvas id="caixa" width="760" height="470"></canvas>
+    <div class="palco-rodape">
+      <div class="legenda" id="legenda"></div>
+      <div style="display:flex;gap:8px">
+        <button id="btnPausa">Pausar</button>
+        <button id="btnReset">Reiniciar</button>
+      </div>
+    </div>
+  </section>
+
+  <aside class="painel">
+    <div class="bloco">
+      <h2>Variáveis da reação</h2>
+      <div class="controle">
+        <div class="linha"><label for="tempSlider">Temperatura</label><span class="valor"><span id="tempVal">400</span> K</span></div>
+        <input type="range" id="tempSlider" min="120" max="1000" value="400" step="10">
+        <p class="ea-nota" id="eaNota"></p>
+      </div>
+      <div class="controle">
+        <div class="linha"><label for="aSlider" id="aLabel"></label><span class="valor" id="aVal"></span></div>
+        <input type="range" id="aSlider" min="0" max="30" step="1">
+      </div>
+      <div class="controle">
+        <div class="linha"><label for="bSlider" id="bLabel"></label><span class="valor" id="bVal"></span></div>
+        <input type="range" id="bSlider" min="0" max="15" step="1">
+      </div>
+      <div class="controle">
+        <div class="linha"><span>Pressão no recipiente</span><span class="valor" id="pressVal">—</span></div>
+        <div class="pressao-barra"><div class="pressao-fill" id="pressFill"></div></div>
+      </div>
+    </div>
+
+    <div class="bloco">
+      <h2>Contagem em tempo real</h2>
+      <div class="contadores">
+        <div class="cont"><div class="n" id="cA">0</div><div class="rot" id="rotA"></div></div>
+        <div class="cont"><div class="n" id="cB">0</div><div class="rot" id="rotB"></div></div>
+        <div class="cont"><div class="n" id="cP" style="color:var(--water)">0</div><div class="rot" id="rotP"></div></div>
+      </div>
+      <p class="previsao" id="previsao"></p>
+      <canvas id="grafico" width="300" height="64"></canvas>
+      <p class="graf-rot">Produto formado ao longo do tempo — compare a inclinação entre temperaturas e entre reações.</p>
+    </div>
+  </aside>
+</main>
+
+<section class="johnstone" aria-label="Níveis do conhecimento químico">
+  <div class="niv"><b>Macroscópico</b>No laboratório: chama, estouro, fumaça branca, sal se formando. O fenômeno que os olhos veem.</div>
+  <div class="niv ativo"><b>Submicroscópico</b>Esta simulação: colisões, energia de ativação, reagente em excesso. O nível invisível que a tecnologia torna manipulável.</div>
+  <div class="niv"><b>Representacional</b>A equação balanceada, os coeficientes estequiométricos e os gráficos que traduzem o fenômeno.</div>
+</section>
+
+<p class="assinatura">Protótipo construído com IA (Claude) como material didático da proposta: a tecnologia não substitui a aula — ela torna visível o que nenhuma bancada escolar consegue mostrar, enquanto o professor problematiza, guia e sistematiza. Inspirado nos simuladores PhET e no modelo dos três níveis de Johnstone.</p>
+
+<!-- modal de reações -->
+<div class="modal-fundo" id="modalFundo" role="dialog" aria-modal="true" aria-labelledby="modalTitulo">
+  <div class="modal">
+    <h3 id="modalTitulo">Escolha a reação</h3>
+    <p class="sub">Compare tipos de ligação e energias de ativação diferentes — repare quanta temperatura cada reação exige para acontecer.</p>
+    <div id="listaRx"></div>
+    <button class="modal-fechar" id="btnFecharModal">Fechar</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const C = {
+    hyd:'#CBD8DE', hydLine:'#5E7681', oxy:'#D5382B', water:'#1C7FA6',
+    na:'#8E6FC0', naLine:'#6A4E9E', cl:'#3FA34D', mg:'#8E9BA3', mgLine:'#66757D',
+    ni:'#3555C8', carb:'#3F3F3F'
+  };
+
+  // Espécies: parts = círculos relativos {dx,dy,r,f(fill),s(stroke opcional)}
+  const REACTIONS = [
+    {
+      id:'agua', nome:'Síntese da água', tipo:'covalente', ea:'media', act:10.5,
+      coef:[2,1,2], need:2, yld:2,
+      eq:[['2 H₂',C.hydLine],['O₂',C.oxy],['2 H₂O',C.water]],
+      desc:'Dois gases invisíveis formam a molécula mais famosa do planeta. Energia de ativação média: aqueça para ver a taxa disparar.',
+      sub:'<b>Ligação covalente.</b> O oxigênio precisa capturar duas moléculas de H₂ para liberar duas de água — observe o intermediário se formando.',
+      A:{label:'H₂', nome:'Moléculas de H₂', r:8, parts:[{dx:-4.5,dy:0,r:6,f:'hyd',s:'hydLine'},{dx:4.5,dy:0,r:6,f:'hyd',s:'hydLine'}], leg:'hyd', legS:'hydLine'},
+      B:{label:'O₂', nome:'Moléculas de O₂', r:10, parts:[{dx:-5,dy:0,r:7,f:'oxy'},{dx:5,dy:0,r:7,f:'oxy'}], leg:'oxy'},
+      P:{label:'H₂O', nome:'H₂O formada', r:10, parts:[{dx:0,dy:0,r:8,f:'water'},{dx:-7,dy:-6,r:4.5,f:'hyd',s:'hydLine'},{dx:7,dy:-6,r:4.5,f:'hyd',s:'hydLine'}], leg:'water'},
+      defA:14, defB:5, maxA:30, maxB:15
+    },
+    {
+      id:'sal', nome:'Formação do sal de cozinha', tipo:'ionica', ea:'baixa', act:4.5,
+      coef:[2,1,2], need:2, yld:2,
+      eq:[['2 Na',C.na],['Cl₂',C.cl],['2 NaCl','#5E8E52']],
+      desc:'Metal alcalino + gás cloro → NaCl. Reação violenta: energia de ativação baixa, acontece até em temperatura fria.',
+      sub:'<b>Ligação iônica.</b> O sódio transfere seu elétron para o cloro. Baixe a temperatura ao mínimo: a reação continua acontecendo — compare com as outras.',
+      A:{label:'Na', nome:'Átomos de Na', r:7, parts:[{dx:0,dy:0,r:7,f:'na',s:'naLine'}], leg:'na', legS:'naLine'},
+      B:{label:'Cl₂', nome:'Moléculas de Cl₂', r:10, parts:[{dx:-5,dy:0,r:7,f:'cl'},{dx:5,dy:0,r:7,f:'cl'}], leg:'cl'},
+      P:{label:'NaCl', nome:'NaCl formado', r:10, parts:[{dx:-4.5,dy:0,r:6,f:'na',s:'naLine'},{dx:5,dy:0,r:7,f:'cl'}], leg:'cl'},
+      defA:14, defB:5, maxA:30, maxB:15
+    },
+    {
+      id:'amonia', nome:'Síntese da amônia (Haber-Bosch)', tipo:'covalente', ea:'alta', act:17,
+      coef:[3,1,2], need:3, yld:2,
+      eq:[['3 H₂',C.hydLine],['N₂',C.ni],['2 NH₃',C.ni]],
+      desc:'A reação que fabrica fertilizantes. O N₂ tem ligação tripla, muito estável: só reage com alta temperatura.',
+      sub:'<b>Ligação covalente.</b> A ligação tripla do N₂ é fortíssima — em temperatura baixa quase nada acontece. Suba para 900 K e compare: é por isso que a indústria usa altas temperaturas e catalisadores.',
+      A:{label:'H₂', nome:'Moléculas de H₂', r:8, parts:[{dx:-4.5,dy:0,r:6,f:'hyd',s:'hydLine'},{dx:4.5,dy:0,r:6,f:'hyd',s:'hydLine'}], leg:'hyd', legS:'hydLine'},
+      B:{label:'N₂', nome:'Moléculas de N₂', r:10, parts:[{dx:-5,dy:0,r:7,f:'ni'},{dx:5,dy:0,r:7,f:'ni'}], leg:'ni'},
+      P:{label:'NH₃', nome:'NH₃ formada', r:10, parts:[{dx:0,dy:0,r:7.5,f:'ni'},{dx:-7,dy:-5,r:4,f:'hyd',s:'hydLine'},{dx:7,dy:-5,r:4,f:'hyd',s:'hydLine'},{dx:0,dy:8.5,r:4,f:'hyd',s:'hydLine'}], leg:'ni'},
+      defA:18, defB:4, maxA:30, maxB:10
+    },
+    {
+      id:'mgo', nome:'Queima do magnésio', tipo:'ionica', ea:'media', act:12,
+      coef:[2,1,2], need:2, yld:2,
+      eq:[['2 Mg',C.mgLine],['O₂',C.oxy],['2 MgO','#A05A3C']],
+      desc:'O flash branco intenso das antigas fotografias. Precisa de ignição, mas depois libera muita energia.',
+      sub:'<b>Ligação iônica.</b> O magnésio precisa de uma energia inicial (ignição) — abaixo de ~500 K quase nada reage. Depois de acesa, a queima é intensa.',
+      A:{label:'Mg', nome:'Átomos de Mg', r:7, parts:[{dx:0,dy:0,r:7,f:'mg',s:'mgLine'}], leg:'mg', legS:'mgLine'},
+      B:{label:'O₂', nome:'Moléculas de O₂', r:10, parts:[{dx:-5,dy:0,r:7,f:'oxy'},{dx:5,dy:0,r:7,f:'oxy'}], leg:'oxy'},
+      P:{label:'MgO', nome:'MgO formado', r:10, parts:[{dx:-4.5,dy:0,r:6.5,f:'mg',s:'mgLine'},{dx:5,dy:0,r:7,f:'oxy'}], leg:'oxy'},
+      defA:14, defB:5, maxA:30, maxB:15
+    },
+    {
+      id:'co2', nome:'Combustão do carbono', tipo:'covalente', ea:'media', act:11,
+      coef:[1,1,1], need:1, yld:1,
+      eq:[['C',C.carb],['O₂',C.oxy],['CO₂',C.carb]],
+      desc:'A queima do carvão, proporção 1 : 1 : 1 — a mais simples para começar a estequiometria.',
+      sub:'<b>Ligação covalente.</b> Proporção 1 : 1 : 1 — ótima para introduzir o conceito de reagente limitante antes das proporções 2 : 1.',
+      A:{label:'C', nome:'Átomos de C', r:7, parts:[{dx:0,dy:0,r:6.5,f:'carb'}], leg:'carb'},
+      B:{label:'O₂', nome:'Moléculas de O₂', r:10, parts:[{dx:-5,dy:0,r:7,f:'oxy'},{dx:5,dy:0,r:7,f:'oxy'}], leg:'oxy'},
+      P:{label:'CO₂', nome:'CO₂ formado', r:11, parts:[{dx:0,dy:0,r:6,f:'carb'},{dx:-9,dy:0,r:6.5,f:'oxy'},{dx:9,dy:0,r:6.5,f:'oxy'}], leg:'oxy'},
+      defA:12, defB:12, maxA:30, maxB:30
+    }
+  ];
+
+  const EA_TXT = {baixa:'Energia de ativação baixa', media:'Energia de ativação média', alta:'Energia de ativação alta'};
+
+  let RX = REACTIONS[0];
+
+  const cv = document.getElementById('caixa'), ctx = cv.getContext('2d');
+  const gcv = document.getElementById('grafico'), gctx = gcv.getContext('2d');
+  const W = cv.width, H = cv.height;
+
+  let particles = [], flashes = [], formed = 0, temp = 400, paused = false, history = [], tick = 0;
+  const BASE_SPEED = 1.55;
+  function targetSpeed(){ return BASE_SPEED * Math.pow(temp/300, 0.85); }
+
+  function spawn(kind){
+    const spec = RX[kind], r = spec.r;
+    const ang = Math.random()*Math.PI*2;
+    const s = targetSpeed() * (0.6 + Math.random()*0.8);
+    return { kind, r, absorbed:0,
+      x: r + Math.random()*(W-2*r), y: r + Math.random()*(H-2*r),
+      vx: Math.cos(ang)*s, vy: Math.sin(ang)*s };
+  }
+  function count(kind){ return particles.filter(p=>p.kind===kind).length; }
+
+  // ---------- UI refs ----------
+  const tempSlider = document.getElementById('tempSlider');
+  const aSlider = document.getElementById('aSlider'), bSlider = document.getElementById('bSlider');
+  const el = id => document.getElementById(id);
+
+  function renderStatic(){
+    // equação-título
+    el('eqTitulo').innerHTML =
+      '<span style="color:'+RX.eq[0][1]+'">'+RX.eq[0][0]+'</span><span class="seta">+</span>'+
+      '<span style="color:'+RX.eq[1][1]+'">'+RX.eq[1][0]+'</span><span class="seta">⟶</span>'+
+      '<span style="color:'+RX.eq[2][1]+'">'+RX.eq[2][0]+'</span>';
+    el('rxSub').innerHTML = RX.sub;
+    el('eaNota').textContent = EA_TXT[RX.ea] + ' — repare em quanta temperatura esta reação exige.';
+    // legenda: mini-SVG com os mesmos círculos (parts) desenhados na caixa
+    const leg = (spec)=>{
+      let x0=Infinity, y0=Infinity, x1=-Infinity, y1=-Infinity;
+      for(const c of spec.parts){
+        const e = c.r + (c.s ? 0.8 : 0) + 0.5;
+        x0=Math.min(x0,c.dx-e); y0=Math.min(y0,c.dy-e);
+        x1=Math.max(x1,c.dx+e); y1=Math.max(y1,c.dy+e);
+      }
+      const w = x1-x0, h = y1-y0, esc = 0.85;
+      const circ = spec.parts.map(c=>'<circle cx="'+c.dx+'" cy="'+c.dy+'" r="'+c.r+'" fill="'+C[c.f]+'"'+
+        (c.s ? ' stroke="'+C[c.s]+'" stroke-width="1.6"' : '')+'/>').join('');
+      return '<span><svg viewBox="'+x0+' '+y0+' '+w+' '+h+'" width="'+(w*esc).toFixed(1)+'" height="'+(h*esc).toFixed(1)+'" aria-hidden="true">'+circ+'</svg>'+spec.label+'</span>';
+    };
+    el('legenda').innerHTML = leg(RX.A)+leg(RX.B)+leg(RX.P);
+    // sliders e contadores
+    el('aLabel').textContent = RX.A.nome;
+    el('bLabel').textContent = RX.B.nome;
+    aSlider.max = RX.maxA; bSlider.max = RX.maxB;
+    el('rotA').textContent = RX.A.label+' restante';
+    el('rotB').textContent = RX.B.label+' restante';
+    el('rotP').textContent = RX.P.nome;
+  }
+
+  function reset(toDefaults){
+    particles = []; flashes = []; formed = 0; history = []; tick = 0;
+    if(toDefaults){ aSlider.value = RX.defA; bSlider.value = RX.defB; }
+    el('aVal').textContent = aSlider.value; el('bVal').textContent = bSlider.value;
+    for(let i=0;i<+aSlider.value;i++) particles.push(spawn('A'));
+    for(let i=0;i<+bSlider.value;i++) particles.push(spawn('B'));
+  }
+
+  // ---------- eventos ----------
+  tempSlider.addEventListener('input', ()=>{
+    const oldT = temp; temp = +tempSlider.value;
+    el('tempVal').textContent = temp;
+    const k = Math.pow(temp/oldT, 0.85);
+    for(const p of particles){ p.vx*=k; p.vy*=k; }
+  });
+  function syncCount(slider, kind, valId){
+    const desired = +slider.value; let atual = count(kind);
+    while(atual < desired){ particles.push(spawn(kind)); atual++; }
+    while(atual > desired){
+      const idx = particles.findIndex(p=>p.kind===kind && p.absorbed===0);
+      if(idx<0) break;
+      particles.splice(idx,1); atual--;
+    }
+    slider.value = count(kind);
+    el(valId).textContent = slider.value;
+  }
+  aSlider.addEventListener('input', ()=>syncCount(aSlider,'A','aVal'));
+  bSlider.addEventListener('input', ()=>syncCount(bSlider,'B','bVal'));
+  el('btnReset').addEventListener('click', ()=>reset(false));
+  const btnPausa = el('btnPausa');
+  btnPausa.addEventListener('click', ()=>{ paused=!paused; btnPausa.textContent = paused?'Continuar':'Pausar'; });
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches){ paused=true; btnPausa.textContent='Continuar'; }
+
+  // ---------- modal ----------
+  const modal = el('modalFundo');
+  function abrirModal(){
+    el('listaRx').innerHTML = REACTIONS.map(r=>{
+      const eq = r.eq.map(e=>'<span style="color:'+e[1]+'">'+e[0]+'</span>').join(' <span style="color:var(--ink-soft);font-weight:300">'+'+'+'</span> ').replace(/\+([^+]*)$/,'⟶$1');
+      return '<button class="rx-card'+(r.id===RX.id?' atual':'')+'" data-id="'+r.id+'">'+
+        '<div class="rx-eq">'+eq+'</div>'+
+        '<div class="rx-meta">'+
+          '<span class="tag '+r.tipo+'">'+(r.tipo==='ionica'?'Ligação iônica':'Ligação covalente')+'</span>'+
+          '<span class="tag ea-'+r.ea+'">'+EA_TXT[r.ea]+'</span>'+
+        '</div>'+
+        '<div class="rx-desc"><b>'+r.nome+'.</b> '+r.desc+'</div>'+
+      '</button>';
+    }).join('');
+    modal.classList.add('aberto');
+  }
+  function fecharModal(){ modal.classList.remove('aberto'); }
+  el('btnTrocar').addEventListener('click', abrirModal);
+  el('btnFecharModal').addEventListener('click', fecharModal);
+  modal.addEventListener('click', e=>{ if(e.target===modal) fecharModal(); });
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') fecharModal(); });
+  el('listaRx').addEventListener('click', e=>{
+    const card = e.target.closest('.rx-card');
+    if(!card) return;
+    RX = REACTIONS.find(r=>r.id===card.dataset.id);
+    renderStatic(); reset(true); fecharModal();
+  });
+
+  // ---------- física ----------
+  function step(){
+    const tgt = targetSpeed();
+    for(const p of particles){
+      const s = Math.hypot(p.vx,p.vy) || 0.001;
+      const f = 1 + 0.15*((tgt*(0.8+Math.random()*0.4))/s - 1);
+      p.vx*=f; p.vy*=f;
+      p.x+=p.vx; p.y+=p.vy;
+      if(p.x<p.r){p.x=p.r;p.vx*=-1} if(p.x>W-p.r){p.x=W-p.r;p.vx*=-1}
+      if(p.y<p.r){p.y=p.r;p.vy*=-1} if(p.y>H-p.r){p.y=H-p.r;p.vy*=-1}
+    }
+    for(let i=0;i<particles.length;i++){
+      for(let j=i+1;j<particles.length;j++){
+        const a=particles[i], b=particles[j];
+        const dx=b.x-a.x, dy=b.y-a.y;
+        const dist=Math.hypot(dx,dy), min=a.r+b.r;
+        if(dist>=min || dist===0) continue;
+
+        const kinds = a.kind+b.kind;
+        if((kinds==='AB'||kinds==='BA')){
+          const rvx=b.vx-a.vx, rvy=b.vy-a.vy;
+          if(rvx*rvx+rvy*rvy > RX.act && Math.random()<0.6){
+            const pa = a.kind==='A'?a:b, hub = a.kind==='A'?b:a;
+            particles.splice(particles.indexOf(pa),1);
+            hub.absorbed++;
+            flashes.push({x:hub.x,y:hub.y,t:1});
+            if(hub.absorbed >= RX.need){
+              hub.kind='P'; hub.r=RX.P.r; hub.absorbed=0;
+              formed++;
+              for(let k=1;k<RX.yld;k++){
+                const nova = spawn('P');
+                nova.x = Math.min(W-nova.r, Math.max(nova.r, hub.x + (Math.random()*30-15)));
+                nova.y = Math.min(H-nova.r, Math.max(nova.r, hub.y + (Math.random()*30-15)));
+                particles.push(nova);
+                formed++;
+              }
+            }
+            continue;
+          }
+        }
+        // colisão elástica
+        const nx=dx/dist, ny=dy/dist;
+        const p1=a.vx*nx+a.vy*ny, p2=b.vx*nx+b.vy*ny;
+        a.vx+=(p2-p1)*nx; a.vy+=(p2-p1)*ny;
+        b.vx+=(p1-p2)*nx; b.vy+=(p1-p2)*ny;
+        const ov=(min-dist)/2;
+        a.x-=nx*ov; a.y-=ny*ov; b.x+=nx*ov; b.y+=ny*ov;
+      }
+    }
+    for(const f of flashes) f.t-=0.05;
+    flashes = flashes.filter(f=>f.t>0);
+  }
+
+  // ---------- desenho ----------
+  function drawSpec(p, spec){
+    for(const c of spec.parts){
+      ctx.fillStyle = C[c.f];
+      ctx.beginPath(); ctx.arc(p.x+c.dx, p.y+c.dy, c.r, 0, Math.PI*2); ctx.fill();
+      if(c.s){ ctx.strokeStyle = C[c.s]; ctx.lineWidth = 1.6; ctx.stroke(); }
+    }
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    for(const f of flashes){
+      ctx.beginPath();
+      ctx.arc(f.x,f.y,18*(1-f.t)+6,0,Math.PI*2);
+      ctx.strokeStyle='rgba(28,127,166,'+(f.t*0.8)+')';
+      ctx.lineWidth=2.5; ctx.stroke();
+    }
+    for(const p of particles){
+      drawSpec(p, RX[p.kind]);
+      if(p.kind==='B' && p.absorbed>0){
+        // indicador do intermediário: pontinhos do reagente A capturado
+        const fill = C[RX.A.parts[0].f];
+        for(let k=0;k<p.absorbed;k++){
+          const ang = -Math.PI/2 + k*0.9;
+          ctx.fillStyle = fill;
+          ctx.beginPath();
+          ctx.arc(p.x + Math.cos(ang)*(p.r+4), p.y + Math.sin(ang)*(p.r+4), 3.5, 0, Math.PI*2);
+          ctx.fill();
+          ctx.strokeStyle = C.hydLine; ctx.lineWidth=1; ctx.stroke();
+        }
+      }
+    }
+  }
+
+  // ---------- painel ----------
+  function updatePanel(){
+    const nA = count('A'), nB = count('B');
+    el('cA').textContent = nA;
+    el('cB').textContent = nB;
+    el('cP').textContent = formed;
+
+    const press = (particles.length * temp) / (19 * 400);
+    el('pressVal').textContent = press.toFixed(2)+' atm';
+    el('pressFill').style.width = Math.min(100, press*30)+'%';
+
+    // previsão: hubs parciais primeiro (precisam de menos A pra completar)
+    const hubs = particles.filter(p=>p.kind==='B').map(h=>RX.need - h.absorbed).sort((x,y)=>x-y);
+    let freeA = nA, completos = 0;
+    for(const falta of hubs){ if(freeA >= falta){ freeA -= falta; completos++; } else break; }
+    const adicionais = completos * RX.yld;
+    const pv = el('previsao');
+    if(nA===0 && nB===0){
+      pv.innerHTML = 'Reação completa: todos os reagentes foram consumidos.';
+    } else if(adicionais===0 && nA>0 && nB===0){
+      pv.innerHTML = '<strong>'+RX.B.label+' foi o reagente limitante.</strong> Sobraram '+nA+' de '+RX.A.label+' em excesso.';
+    } else if(adicionais===0 && nB>0){
+      pv.innerHTML = '<strong>'+RX.A.label+' é o reagente limitante.</strong> Sobra '+RX.B.label+' em excesso — nenhum produto a mais pode se formar.';
+    } else {
+      const sobraA = freeA>0;
+      const lim = sobraA ? RX.B.label : (hubs.length>completos ? RX.A.label : 'nenhum (proporção exata)');
+      pv.innerHTML = 'Com o que resta, ainda podem se formar <strong>'+adicionais+'</strong> de '+RX.P.label+'. Reagente limitante: <strong>'+lim+'</strong>.';
+    }
+  }
+
+  function drawGraph(){
+    const w=gcv.width, h=gcv.height;
+    gctx.clearRect(0,0,w,h);
+    gctx.strokeStyle='#D5E0E4'; gctx.lineWidth=1;
+    gctx.beginPath(); gctx.moveTo(0,h-1); gctx.lineTo(w,h-1); gctx.stroke();
+    if(history.length<2) return;
+    const maxY = Math.max(4, Math.max(...history));
+    gctx.strokeStyle=C.water; gctx.lineWidth=2;
+    gctx.beginPath();
+    history.forEach((v,i)=>{
+      const x=i/(history.length-1)*w, y=h-2-(v/maxY)*(h-8);
+      i===0?gctx.moveTo(x,y):gctx.lineTo(x,y);
+    });
+    gctx.stroke();
+  }
+
+  function loop(){
+    if(!paused){
+      step(); tick++;
+      if(tick%12===0){ history.push(formed); if(history.length>140) history.shift(); }
+    }
+    draw(); updatePanel(); drawGraph();
+    requestAnimationFrame(loop);
+  }
+
+  renderStatic();
+  reset(true);
+  loop();
+})();
+</script>
+</body>
+</html>
