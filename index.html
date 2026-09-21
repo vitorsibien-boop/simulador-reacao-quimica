@@ -31,7 +31,7 @@
   main{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1.9fr) minmax(280px,1fr);gap:18px}
   @media (max-width:880px){main{grid-template-columns:1fr}}
 
-  .palco{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+  .palco{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;align-self:start}
   #caixa{display:block;width:100%;height:auto;background:linear-gradient(180deg,#FBFDFE 0%,#EFF5F7 100%)}
   .palco-rodape{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-top:1px solid var(--line);font-size:13.5px;color:var(--ink-soft);flex-wrap:wrap}
   .legenda{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
@@ -60,6 +60,13 @@
 
   .previsao{font-size:14px;line-height:1.5;color:var(--ink);border-left:3px solid var(--water);padding-left:10px;margin-top:12px}
   .previsao strong{font-weight:750}
+  .interm{font-size:13px;color:var(--ink-soft);margin-top:10px;line-height:1.45}
+  .interm b{color:var(--ink);font-weight:700}
+  .leitura{font-variant-numeric:tabular-nums;color:var(--ink)}
+  .btn-faisca{border-color:#C98A12;color:#7A5208}
+  .btn-faisca:hover{background:#C98A12;color:#fff}
+  .btn-cat{padding:4px 12px;font-size:13px}
+  .btn-cat[aria-pressed="true"]{background:var(--ink);color:#fff}
 
   .pressao-barra{height:10px;border-radius:6px;background:var(--paper);border:1px solid var(--line);overflow:hidden;margin-top:6px}
   .pressao-fill{height:100%;width:20%;background:var(--ink);transition:width .3s}
@@ -125,6 +132,7 @@
     <div class="palco-rodape">
       <div class="legenda" id="legenda"></div>
       <div style="display:flex;gap:8px">
+        <button id="btnFaisca" class="btn-faisca">Faísca</button>
         <button id="btnPausa">Pausar</button>
         <button id="btnReset">Reiniciar</button>
       </div>
@@ -138,6 +146,11 @@
         <div class="linha"><label for="tempSlider">Temperatura</label><span class="valor"><span id="tempVal">400</span> K</span></div>
         <input type="range" id="tempSlider" min="120" max="1000" value="400" step="10">
         <p class="ea-nota" id="eaNota"></p>
+        <p class="ea-nota leitura" id="tGas"></p>
+      </div>
+      <div class="controle" id="ctrlCat" hidden>
+        <div class="linha"><span>Catalisador de ferro</span><button id="btnCat" class="btn-cat" aria-pressed="false">Desligado</button></div>
+        <p class="ea-nota">Ligar ou desligar reinicia a reação.</p>
       </div>
       <div class="controle">
         <div class="linha"><label for="aSlider" id="aLabel"></label><span class="valor" id="aVal"></span></div>
@@ -146,6 +159,11 @@
       <div class="controle">
         <div class="linha"><label for="bSlider" id="bLabel"></label><span class="valor" id="bVal"></span></div>
         <input type="range" id="bSlider" min="0" max="15" step="1">
+      </div>
+      <div class="controle">
+        <div class="linha"><label for="volSlider">Volume do recipiente</label><span class="valor"><span id="volVal">2.0</span> L</span></div>
+        <input type="range" id="volSlider" min="40" max="100" value="100" step="5">
+        <p class="ea-nota">Menos volume, mesmas partículas: mais colisões por segundo e mais pressão.</p>
       </div>
       <div class="controle">
         <div class="linha"><span>Pressão no recipiente</span><span class="valor" id="pressVal">—</span></div>
@@ -160,9 +178,10 @@
         <div class="cont"><div class="n" id="cB">0</div><div class="rot" id="rotB"></div></div>
         <div class="cont"><div class="n" id="cP" style="color:var(--water)">0</div><div class="rot" id="rotP"></div></div>
       </div>
+      <p class="interm" id="interm"></p>
       <p class="previsao" id="previsao"></p>
       <canvas id="grafico" width="300" height="64"></canvas>
-      <p class="graf-rot">Produto formado ao longo do tempo — compare a inclinação entre temperaturas e entre reações.</p>
+      <p class="graf-rot">Quantidade de produto ao longo do tempo: compare a inclinação entre temperaturas e entre reações.</p>
     </div>
   </aside>
 </main>
@@ -201,67 +220,132 @@
   const C = {
     hyd:'#CBD8DE', hydLine:'#5E7681', oxy:'#D5382B', water:'#1C7FA6',
     na:'#8E6FC0', naLine:'#6A4E9E', cl:'#3FA34D', mg:'#8E9BA3', mgLine:'#66757D',
-    ni:'#3555C8', carb:'#3F3F3F'
+    ni:'#3555C8', carb:'#3F3F3F', fe:'#A07E5E', feLine:'#6E5238', eletron:'#0F2A33'
   };
 
-  // Espécies: parts = círculos relativos {dx,dy,r,f(fill),s(stroke opcional)}
+  // ---------- espécies ----------
+  // parts = círculos relativos {dx,dy,r,f(cor),s(contorno opcional)}; at = átomos; m = massa (u)
+  const Hs = (dx,dy,r)=>({dx,dy,r,f:'hyd',s:'hydLine'});
+  const Os = (dx,dy,r)=>({dx,dy,r,f:'oxy'});
+  const el_ = (dx,dy)=>({dx,dy,r:1.9,f:'eletron'});   // elétron desemparelhado: marca de radical
+  const SP = {
+    H2:  {label:'H₂',   m:2,  r:8,  at:{H:2},      parts:[Hs(-4.5,0,6),Hs(4.5,0,6)]},
+    O2:  {label:'O₂',   m:32, r:10, at:{O:2},      parts:[Os(-5,0,7),Os(5,0,7)]},
+    H:   {label:'H•',   m:1,  r:6,  at:{H:1},      parts:[Hs(0,0,5),el_(5,-5)]},
+    O:   {label:'•O•',  m:16, r:8,  at:{O:1},      parts:[Os(0,0,7),el_(-6,-6),el_(6,-6)]},
+    OH:  {label:'•OH',  m:17, r:9,  at:{O:1,H:1},  parts:[Os(-2,0,7),Hs(6,-4,4.5),el_(-8,-5)]},
+    HO2: {label:'HO₂•', m:33, r:11, at:{H:1,O:2},  parts:[Os(-5,1,7),Os(5,1,7),Hs(10,-5,4),el_(-11,-5)]},
+    H2O: {label:'H₂O',  m:18, r:10, at:{H:2,O:1},  parts:[Os(0,0,8),Hs(-7,-6,4.5),Hs(7,-6,4.5)]},
+    N2:  {label:'N₂',   m:28, r:10, at:{N:2},      parts:[{dx:-5,dy:0,r:7,f:'ni'},{dx:5,dy:0,r:7,f:'ni'}]},
+    NH3: {label:'NH₃',  m:17, r:10, at:{N:1,H:3},  parts:[{dx:0,dy:0,r:7.5,f:'ni'},Hs(-7,-5,4),Hs(7,-5,4),Hs(0,8.5,4)]},
+    Cl2: {label:'Cl₂',  m:71, r:10, at:{Cl:2},     parts:[{dx:-5,dy:0,r:7,f:'cl'},{dx:5,dy:0,r:7,f:'cl'}]},
+    Na:  {label:'Na',   m:23, r:7,  at:{Na:1},     parts:[{dx:0,dy:0,r:7,f:'na',s:'naLine'}]},
+    NaCl:{label:'NaCl', m:58, r:10, at:{Na:1,Cl:1},parts:[{dx:-4.5,dy:0,r:6,f:'na',s:'naLine'},{dx:5,dy:0,r:7,f:'cl'}]},
+    Mg:  {label:'Mg',   m:24, r:7,  at:{Mg:1},     parts:[{dx:0,dy:0,r:7,f:'mg',s:'mgLine'}]},
+    MgO: {label:'MgO',  m:40, r:10, at:{Mg:1,O:1}, parts:[{dx:-4.5,dy:0,r:6.5,f:'mg',s:'mgLine'},Os(5,0,7)]},
+    C:   {label:'C',    m:12, r:7,  at:{C:1},      parts:[{dx:0,dy:0,r:6.5,f:'carb'}]},
+    Cads:{label:'C–O',  m:28, r:7,  at:{C:1,O:1},  parts:[{dx:0,dy:1,r:6.5,f:'carb'},Os(0,-6,4)]},
+    CO:  {label:'CO',   m:28, r:10, at:{C:1,O:1},  parts:[{dx:-4.5,dy:0,r:6.5,f:'carb'},Os(5,0,6.5)]},
+    CO2: {label:'CO₂',  m:44, r:11, at:{C:1,O:2},  parts:[{dx:0,dy:0,r:6,f:'carb'},Os(-9,0,6.5),Os(9,0,6.5)]},
+    Fe:  {label:'Fe (catalisador)', r:7, at:{},    parts:[{dx:0,dy:0,r:7,f:'fe',s:'feLine'}]},
+    Nads:  {label:'N*',   at:{N:1},     parts:[{dx:0,dy:0,r:4.5,f:'ni'}]},
+    Hads:  {label:'H*',   at:{H:1},     parts:[Hs(0,0,3.5)]},
+    NHads: {label:'NH*',  at:{N:1,H:1}, parts:[{dx:0,dy:0,r:4.5,f:'ni'},Hs(0,-6,3)]},
+    NH2ads:{label:'NH₂*', at:{N:1,H:2}, parts:[{dx:0,dy:0,r:4.5,f:'ni'},Hs(-4.5,-5,3),Hs(4.5,-5,3)]}
+  };
+  // massa efetiva comprimida (m^0,4): o H continua o mais rápido, mas o Cl₂ não fica parado na tela
+  for(const k in SP){ SP[k].key = k; if(SP[k].m) SP[k].me = Math.pow(SP[k].m, 0.4); }
+
+  // ---------- reações ----------
+  // Passos elementares em fase gasosa: a + b -> p. th = barreira (K, energia na linha dos centros);
+  // dh = energia liberada(-)/absorvida(+) em K; pr = fator estérico. Um produto só = recombinação,
+  // que exige um terceiro corpo por perto para levar a energia embora.
+  // Barreiras e calores reais foram multiplicados pelo mesmo fator (~0,22) para caber na escala de tempo da tela.
   const REACTIONS = [
     {
-      id:'agua', nome:'Síntese da água', tipo:'covalente', ea:'media', act:10.5,
-      coef:[2,1,2], need:2, yld:2,
+      id:'agua', nome:'Síntese da água', tipo:'covalente', ea:'alta', modelo:'gas',
+      A:'H2', B:'O2', P:'H2O', elem:{H:'A', O:'B'}, inter:['H','O','OH','HO2'],
+      leg:['H2','O2','H','O','OH','H2O'],
       eq:[['2 H₂',C.hydLine],['O₂',C.oxy],['2 H₂O',C.water]],
-      desc:'Dois gases invisíveis formam a molécula mais famosa do planeta. Energia de ativação média: aqueça para ver a taxa disparar.',
-      sub:'<b>Ligação covalente.</b> O oxigênio precisa capturar duas moléculas de H₂ para liberar duas de água — observe o intermediário se formando.',
-      A:{label:'H₂', nome:'Moléculas de H₂', r:8, parts:[{dx:-4.5,dy:0,r:6,f:'hyd',s:'hydLine'},{dx:4.5,dy:0,r:6,f:'hyd',s:'hydLine'}], leg:'hyd', legS:'hydLine'},
-      B:{label:'O₂', nome:'Moléculas de O₂', r:10, parts:[{dx:-5,dy:0,r:7,f:'oxy'},{dx:5,dy:0,r:7,f:'oxy'}], leg:'oxy'},
-      P:{label:'H₂O', nome:'H₂O formada', r:10, parts:[{dx:0,dy:0,r:8,f:'water'},{dx:-7,dy:-6,r:4.5,f:'hyd',s:'hydLine'},{dx:7,dy:-6,r:4.5,f:'hyd',s:'hydLine'}], leg:'water'},
-      defA:14, defB:5, maxA:30, maxB:15
+      nomeA:'Moléculas de H₂', nomeB:'Moléculas de O₂', nomeP:'H₂O formada',
+      defA:24, defB:12, maxA:40, maxB:20,
+      faisca:{quebra:[['H2',['H','H'],6],['O2',['O','O'],3]]}, brilho:'#9CC7FF',
+      dica:'mistura estável abaixo de ~850 K: use a faísca ou aqueça.',
+      desc:'Dois gases que, misturados, não reagem sozinhos: precisam de uma faísca ou de ~850 K. Depois, uma reação em cadeia de radicais se multiplica e explode.',
+      sub:'<b>Ligação covalente · reação em cadeia.</b> A faísca quebra moléculas e cria radicais (H•, •O•, •OH). Cada H• que atinge um O₂ gera dois radicais novos: a reação se multiplica, e o calor liberado acelera tudo.',
+      passos:[
+        {a:'H2', b:'O2', p:['H','HO2'], th:2600, dh:2500, pr:1},     // iniciação térmica (rara)
+        {a:'H',  b:'O2', p:['OH','O'],  th:3000, dh:1850, pr:1},     // ramificação (a etapa-chave)
+        {a:'O',  b:'H2', p:['OH','H'],  th:1100, dh:210,  pr:1},     // ramificação
+        {a:'OH', b:'H2', p:['H2O','H'], th:600,  dh:-1670, pr:1},    // propagação: forma água
+        {a:'HO2',b:'H2', p:['H2O','OH'],th:2600, dh:-5700, pr:1},
+        {a:'HO2',b:'H',  p:['OH','OH'], th:200,  dh:-4030, pr:0.6},
+        {a:'HO2',b:'H',  p:['H2','O2'], th:0,    dh:-6100, pr:0.4},
+        {a:'OH', b:'OH', p:['H2O','O'], th:100,  dh:-1880, pr:0.5},
+        {a:'H',  b:'OH', p:['H2O'],     th:0,    dh:-13200, pr:0.5}, // recombinações (terceiro corpo)
+        {a:'H',  b:'H',  p:['H2'],      th:0,    dh:-11550, pr:0.5},
+        {a:'O',  b:'O',  p:['O2'],      th:0,    dh:-13200, pr:0.5},
+        {a:'H',  b:'O2', p:['HO2'],     th:0,    dh:-5400,  pr:0.04}  // terminação: vence a ramificação abaixo de ~850 K
+      ]
     },
     {
-      id:'sal', nome:'Formação do sal de cozinha', tipo:'ionica', ea:'baixa', act:4.5,
-      coef:[2,1,2], need:2, yld:2,
+      id:'sal', nome:'Formação do sal de cozinha', tipo:'ionica', ea:'baixa', modelo:'solido',
+      A:'Na', B:'Cl2', P:'NaCl', elem:{Na:'A', Cl:'B'}, leg:['Na','Cl2','NaCl'],
       eq:[['2 Na',C.na],['Cl₂',C.cl],['2 NaCl','#5E8E52']],
-      desc:'Metal alcalino + gás cloro → NaCl. Reação violenta: energia de ativação baixa, acontece até em temperatura fria.',
-      sub:'<b>Ligação iônica.</b> O sódio transfere seu elétron para o cloro. Baixe a temperatura ao mínimo: a reação continua acontecendo — compare com as outras.',
-      A:{label:'Na', nome:'Átomos de Na', r:7, parts:[{dx:0,dy:0,r:7,f:'na',s:'naLine'}], leg:'na', legS:'naLine'},
-      B:{label:'Cl₂', nome:'Moléculas de Cl₂', r:10, parts:[{dx:-5,dy:0,r:7,f:'cl'},{dx:5,dy:0,r:7,f:'cl'}], leg:'cl'},
-      P:{label:'NaCl', nome:'NaCl formado', r:10, parts:[{dx:-4.5,dy:0,r:6,f:'na',s:'naLine'},{dx:5,dy:0,r:7,f:'cl'}], leg:'cl'},
-      defA:14, defB:5, maxA:30, maxB:15
+      nomeA:'Átomos de Na (sólido)', nomeB:'Moléculas de Cl₂', nomeP:'NaCl formado',
+      defA:24, defB:14, maxA:36, maxB:30,
+      sup:{gas:'Cl2', th:0, pr:0.8, calor:15, tIgn:370}, faisca:{}, brilho:'#FFC23D',
+      dica:'reage já no ambiente; acima de ~370 K o sódio derrete e a crosta de NaCl se desprende.',
+      desc:'Sódio metálico (sólido) em gás cloro. O Cl₂ se quebra na superfície do metal e cada átomo de Cl arranca um elétron de um Na: formam-se íons Na⁺ e Cl⁻.',
+      sub:'<b>Ligação iônica · reação na superfície.</b> A reação acontece na superfície do sódio sólido e libera muito calor. Forma-se uma crosta de NaCl que protege o metal; quando a superfície passa de ~370 K (fusão do Na), a crosta se desprende como fumaça branca e a reação acelera.'
     },
     {
-      id:'amonia', nome:'Síntese da amônia (Haber-Bosch)', tipo:'covalente', ea:'alta', act:17,
-      coef:[3,1,2], need:3, yld:2,
+      id:'amonia', nome:'Síntese da amônia (Haber-Bosch)', tipo:'covalente', ea:'alta', modelo:'catalisador',
+      A:'H2', B:'N2', P:'NH3', elem:{H:'A', N:'B'}, leg:['H2','N2','Fe','NH3'],
       eq:[['3 H₂',C.hydLine],['N₂',C.ni],['2 NH₃',C.ni]],
-      desc:'A reação que fabrica fertilizantes. O N₂ tem ligação tripla, muito estável: só reage com alta temperatura.',
-      sub:'<b>Ligação covalente.</b> A ligação tripla do N₂ é fortíssima — em temperatura baixa quase nada acontece. Suba para 900 K e compare: é por isso que a indústria usa altas temperaturas e catalisadores.',
-      A:{label:'H₂', nome:'Moléculas de H₂', r:8, parts:[{dx:-4.5,dy:0,r:6,f:'hyd',s:'hydLine'},{dx:4.5,dy:0,r:6,f:'hyd',s:'hydLine'}], leg:'hyd', legS:'hydLine'},
-      B:{label:'N₂', nome:'Moléculas de N₂', r:10, parts:[{dx:-5,dy:0,r:7,f:'ni'},{dx:5,dy:0,r:7,f:'ni'}], leg:'ni'},
-      P:{label:'NH₃', nome:'NH₃ formada', r:10, parts:[{dx:0,dy:0,r:7.5,f:'ni'},{dx:-7,dy:-5,r:4,f:'hyd',s:'hydLine'},{dx:7,dy:-5,r:4,f:'hyd',s:'hydLine'},{dx:0,dy:8.5,r:4,f:'hyd',s:'hydLine'}], leg:'ni'},
-      defA:18, defB:4, maxA:30, maxB:10
+      nomeA:'Moléculas de H₂', nomeB:'Moléculas de N₂', nomeP:'NH₃ presente',
+      defA:24, defB:8, maxA:36, maxB:15, reversivel:true,
+      cat:{prH:0.5, thN:700, prN:0.6, thRa:2200, prRa:0.4, Ah:3, thH:1500, thEx:800,
+           thDH:3000, thDN:6000, Ad:0.3},
+      dica:'sem catalisador, nada acontece em nenhuma temperatura.',
+      desc:'A reação que fabrica fertilizantes. Sem catalisador, não acontece nem a 1000 K: o N₂ só se quebra sobre a superfície do ferro.',
+      sub:'<b>Ligação covalente · catálise heterogênea.</b> Ligue o catalisador de ferro: N₂ e H₂ se quebram em átomos sobre o metal, que se combinam passo a passo (N → NH → NH₂ → NH₃). A reação é reversível: temperatura alta acelera, mas desloca o equilíbrio para os reagentes.'
     },
     {
-      id:'mgo', nome:'Queima do magnésio', tipo:'ionica', ea:'media', act:12,
-      coef:[2,1,2], need:2, yld:2,
+      id:'mgo', nome:'Queima do magnésio', tipo:'ionica', ea:'alta', modelo:'solido',
+      A:'Mg', B:'O2', P:'MgO', elem:{Mg:'A', O:'B'}, leg:['Mg','O2','MgO'],
       eq:[['2 Mg',C.mgLine],['O₂',C.oxy],['2 MgO','#A05A3C']],
-      desc:'O flash branco intenso das antigas fotografias. Precisa de ignição, mas depois libera muita energia.',
-      sub:'<b>Ligação iônica.</b> O magnésio precisa de uma energia inicial (ignição) — abaixo de ~500 K quase nada reage. Depois de acesa, a queima é intensa.',
-      A:{label:'Mg', nome:'Átomos de Mg', r:7, parts:[{dx:0,dy:0,r:7,f:'mg',s:'mgLine'}], leg:'mg', legS:'mgLine'},
-      B:{label:'O₂', nome:'Moléculas de O₂', r:10, parts:[{dx:-5,dy:0,r:7,f:'oxy'},{dx:5,dy:0,r:7,f:'oxy'}], leg:'oxy'},
-      P:{label:'MgO', nome:'MgO formado', r:10, parts:[{dx:-4.5,dy:0,r:6.5,f:'mg',s:'mgLine'},{dx:5,dy:0,r:7,f:'oxy'}], leg:'oxy'},
-      defA:14, defB:5, maxA:30, maxB:15
+      nomeA:'Átomos de Mg (sólido)', nomeB:'Moléculas de O₂', nomeP:'MgO formado',
+      defA:24, defB:14, maxA:36, maxB:30,
+      sup:{gas:'O2', th:400, pr:0.5, calor:150, tIgn:900, filme:true}, faisca:{}, brilho:'#FFFFFF',
+      dica:'ignição a ~900 K ou com a faísca.',
+      desc:'O flash branco das antigas fotografias. No frio, uma película de MgO protege o metal; precisa de ignição (~900 K) e depois se sustenta com o próprio calor.',
+      sub:'<b>Ligação iônica · combustão de metal.</b> O O₂ se quebra na superfície do magnésio e forma MgO. Abaixo de ~900 K a camada de óxido protege o metal (passivação). Use a faísca: o calor liberado mantém a queima.'
     },
     {
-      id:'co2', nome:'Combustão do carbono', tipo:'covalente', ea:'media', act:11,
-      coef:[1,1,1], need:1, yld:1,
+      id:'co2', nome:'Combustão do carbono', tipo:'covalente', ea:'media', modelo:'carbono',
+      A:'C', B:'O2', P:'CO2', elem:{C:'A', O:'B'}, inter:['CO','O'], leg:['C','O2','CO','CO2'],
       eq:[['C',C.carb],['O₂',C.oxy],['CO₂',C.carb]],
-      desc:'A queima do carvão, proporção 1 : 1 : 1 — a mais simples para começar a estequiometria.',
-      sub:'<b>Ligação covalente.</b> Proporção 1 : 1 : 1 — ótima para introduzir o conceito de reagente limitante antes das proporções 2 : 1.',
-      A:{label:'C', nome:'Átomos de C', r:7, parts:[{dx:0,dy:0,r:6.5,f:'carb'}], leg:'carb'},
-      B:{label:'O₂', nome:'Moléculas de O₂', r:10, parts:[{dx:-5,dy:0,r:7,f:'oxy'},{dx:5,dy:0,r:7,f:'oxy'}], leg:'oxy'},
-      P:{label:'CO₂', nome:'CO₂ formado', r:11, parts:[{dx:0,dy:0,r:6,f:'carb'},{dx:-9,dy:0,r:6.5,f:'oxy'},{dx:9,dy:0,r:6.5,f:'oxy'}], leg:'oxy'},
-      defA:12, defB:12, maxA:30, maxB:30
+      nomeA:'Átomos de C (carvão)', nomeB:'Moléculas de O₂', nomeP:'CO₂ formado',
+      defA:18, defB:20, maxA:36, maxB:30,
+      sup:{gas:'O2', th:700, pr:0.8, calor:45, desA:20, desTh:4000}, faisca:{}, brilho:'#FF8A3D',
+      dica:'o carvão acende a ~650 K ou com a faísca.',
+      desc:'A queima do carvão: C sólido + O₂. Na superfície forma-se primeiro CO, que depois queima no gás virando CO₂. Com pouco O₂, sobra CO.',
+      sub:'<b>Ligação covalente · combustão do carvão.</b> O carbono sólido reage na superfície e libera CO; o CO queima no gás e vira CO₂. Com oxigênio em falta, sobra monóxido de carbono (combustão incompleta).',
+      passos:[
+        {a:'CO', b:'O2', p:['CO2','O'], th:1400, dh:-900,  pr:1},    // na vida real, traços de água aceleram (via •OH)
+        {a:'O',  b:'CO', p:['CO2'],     th:0,    dh:-14000, pr:0.5},
+        {a:'O',  b:'O',  p:['O2'],      th:0,    dh:-13200, pr:0.5}
+      ]
     }
   ];
+  for(const rx of REACTIONS){
+    rx.mapa = {};
+    for(const st of rx.passos || []){
+      (rx.mapa[st.a+'|'+st.b] ||= []).push(st);
+      if(st.a !== st.b) (rx.mapa[st.b+'|'+st.a] ||= []).push(st);
+    }
+  }
 
   const EA_TXT = {baixa:'Energia de ativação baixa', media:'Energia de ativação média', alta:'Energia de ativação alta'};
 
@@ -269,87 +353,460 @@
 
   const cv = document.getElementById('caixa'), ctx = cv.getContext('2d');
   const gcv = document.getElementById('grafico'), gctx = gcv.getContext('2d');
-  const W = cv.width, H = cv.height;
+  const W = cv.width, H = cv.height, GW = gcv.width, GH = gcv.height;
+  // desenho nítido em telas de alta densidade (coordenadas lógicas continuam W×H)
+  const DPR = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = W*DPR; cv.height = H*DPR; ctx.scale(DPR, DPR);
+  gcv.width = GW*DPR; gcv.height = GH*DPR; gctx.scale(DPR, DPR);
 
-  let particles = [], flashes = [], formed = 0, temp = 400, paused = false, history = [], tick = 0;
-  const BASE_SPEED = 1.55;
-  function targetSpeed(){ return BASE_SPEED * Math.pow(temp/300, 0.85); }
+  // ---------- física ----------
+  const KB = 0.009;      // energia por kelvin (E = ½·m·v², ⟨E⟩ = kT em 2D)
+  const SUB = 3;         // subpassos por quadro
+  const VMAX = 7;        // limite de velocidade por subpasso (estabilidade numérica)
+  // chance de a parede trocar calor com a partícula que bate nela. Na explosão da água ela é baixa:
+  // a reação real leva milissegundos, muito menos que o resfriamento pelas paredes.
+  const acomod = ()=> RX.modelo === 'gas' ? 0.06 : 0.3;
+  const ACOMOD_SUP = 0.5;   // gás sobre superfície metálica troca calor com facilidade
+  const CEL = 15, NCOLMAX = 18, NSIT = 18, SIT = 16, CAT_H = 14;
 
-  function spawn(kind){
-    const spec = RX[kind], r = spec.r;
-    const ang = Math.random()*Math.PI*2;
-    const s = targetSpeed() * (0.6 + Math.random()*0.8);
-    return { kind, r, absorbed:0,
-      x: r + Math.random()*(W-2*r), y: r + Math.random()*(H-2*r),
-      vx: Math.cos(ang)*s, vy: Math.sin(ang)*s };
+  let particles = [], cols = [], sites = [], flashes = [], faiscas = [];
+  let temp = 400, paused = false, history = [], tick = 0;
+  let vol = 1, wallX = W;   // vol: fração do volume máximo; wallX: posição do pistão
+  let tgSuave = 400; 
+  let calor = 0;            // calor acumulado na superfície sólida (K acima das paredes)
+  let catalisador = false;
+
+  const Tsup = ()=> temp + calor;
+  function velTermica(sp, T){
+    // distribuição de Maxwell em 2D: módulo segue Rayleigh com σ² = kT/m
+    const s = Math.sqrt(KB*T/SP[sp].me) * Math.sqrt(-2*Math.log(1-Math.random()));
+    const a = Math.random()*Math.PI*2;
+    return [Math.cos(a)*s, Math.sin(a)*s];
   }
-  function count(kind){ return particles.filter(p=>p.kind===kind).length; }
+  function nova(sp, x, y, T){
+    const [vx,vy] = velTermica(sp, T ?? temp);
+    return {sp, r:SP[sp].r, m:SP[sp].me, x, y, vx, vy};
+  }
+  function xBloco(){ return Math.max(8, wallX/2 - (RX.modelo==='catalisador' ? NSIT*SIT : Math.max(1, cols.length)*CEL)/2); }
+  function alturaPiso(){
+    if(RX.modelo==='catalisador') return catalisador ? CAT_H : 0;
+    let h = 0; for(const c of cols) h = Math.max(h, c.cel.length*CEL);
+    return h;
+  }
+  function spawnGas(sp){
+    const r = SP[sp].r, yMax = H - alturaPiso() - r - 2;
+    return nova(sp, r + Math.random()*(wallX-2*r), r + Math.random()*(yMax-r));
+  }
+  function montarSolido(n){
+    // camada de átomos no fundo: até NCOLMAX átomos expostos, o resto empilhado embaixo
+    cols = [];
+    const nc = Math.max(1, Math.min(NCOLMAX, n));
+    for(let i=0;i<nc;i++) cols.push({x:0, cel:[]});
+    for(let k=0;k<n;k++) cols[k % nc].cel.push(RX.A);
+    if(RX.sup && RX.sup.filme) cols.forEach(c=>c.filme = true);   // metal exposto ao ar já vem oxidado
+    alinharBloco();
+  }
+  function montarSitios(){
+    sites = [];
+    const x0 = xBloco();
+    for(let i=0;i<NSIT;i++) sites.push({x:x0 + i*SIT, ads:null});
+  }
+  function alinharBloco(){
+    const x0 = xBloco();
+    cols.forEach((c,i)=>c.x = x0 + i*CEL);
+    sites.forEach((s,i)=>s.x = x0 + i*SIT);
+  }
+  const vivas = ()=> particles.filter(p=>!p.morto);
+  const conta = sp => particles.reduce((n,p)=>n + (!p.morto && p.sp===sp), 0);
 
-  // ---------- UI refs ----------
+  function flash(x, y, cor, forte){ flashes.push({x, y, t:1, cor: cor || '28,127,166', forte}); }
+
+  // reação entre duas partículas que colidiram (energia e movimento do centro de massa conservados)
+  function reagir(a, b, st, Erel, novas){
+    const Mab = a.m + b.m;
+    const Vx = (a.m*a.vx + b.m*b.vx)/Mab, Vy = (a.m*a.vy + b.m*b.vy)/Mab;
+    const E = Erel - KB*st.dh;
+    if(E < 0) return false;
+    const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+    if(st.p.length === 1){
+      // recombinação: um terceiro corpo próximo leva a energia liberada
+      let c = null, dmin = 45;
+      for(const q of particles){
+        if(q===a || q===b || q.morto) continue;
+        const d = Math.hypot(q.x-mx, q.y-my);
+        if(d < dmin){ dmin = d; c = q; }
+      }
+      if(!c) return false;
+      const p = nova(st.p[0], mx, my); p.vx = Vx; p.vy = Vy;
+      const s = Math.hypot(c.vx, c.vy) || 0.01;
+      const s2 = Math.sqrt(s*s + 2*E/c.m);
+      c.vx *= s2/s; c.vy *= s2/s;
+      novas.push(p);
+    } else {
+      const p1 = nova(st.p[0], a.x, a.y), p2 = nova(st.p[1], b.x, b.y);
+      const m1 = p1.m, m2 = p2.m, mu = m1*m2/(m1+m2);
+      const u = Math.sqrt(2*E/mu), ang = Math.random()*Math.PI*2;
+      const ux = Math.cos(ang)*u, uy = Math.sin(ang)*u;
+      p1.vx = Vx + ux*m2/(m1+m2); p1.vy = Vy + uy*m2/(m1+m2);
+      p2.vx = Vx - ux*m1/(m1+m2); p2.vy = Vy - uy*m1/(m1+m2);
+      const sep = (p1.r + p2.r)/2 + 1;
+      p1.x = mx + Math.cos(ang)*sep; p1.y = my + Math.sin(ang)*sep;
+      p2.x = mx - Math.cos(ang)*sep; p2.y = my - Math.sin(ang)*sep;
+      novas.push(p1, p2);
+    }
+    a.morto = b.morto = true;
+    const formouProduto = st.p.includes(RX.P);
+    flash(mx, my, formouProduto ? '28,127,166' : '201,138,18', formouProduto);
+    return true;
+  }
+
+  // velocidade de quem sai de uma parede a T: distribuição ponderada pelo fluxo (∝ v²·e^(−mv²/2kT) em 2D).
+  // Usar a distribuição do volume aqui esfriaria o gás até a metade da temperatura da parede.
+  function velSaida(sp, T){
+    const s = Math.sqrt(KB*T/SP[sp].me), g = ()=>{ let u=0; while(!u) u=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*Math.random()); };
+    const a = g(), b = g(), c = g();
+    return s*Math.sqrt(a*a + b*b + c*c);
+  }
+  // molécula que se solta de uma superfície: sai para cima com a distribuição de saída
+  function sobe(q, T){
+    const s = velSaida(q.sp, T), a = -Math.PI*(0.15 + 0.7*Math.random());
+    q.vx = Math.cos(a)*s; q.vy = Math.sin(a)*s;
+  }
+  // colisão com parede: reflete e, com chance ac, sai com a velocidade térmica da parede
+  function paredeTermica(p, nx, ny, T, ac){
+    const vn = p.vx*nx + p.vy*ny;
+    if(vn >= 0) return;
+    p.vx -= 2*vn*nx; p.vy -= 2*vn*ny;
+    if(Math.random() < (ac ?? acomod())){
+      const s = velSaida(p.sp, T), s0 = Math.hypot(p.vx,p.vy) || 1;
+      p.vx = p.vx/s0*s; p.vy = p.vy/s0*s;
+    }
+  }
+
+  // ---------- reações de superfície ----------
+  function vizinhoCom(i, lista, alvo){
+    const ordem = Math.random()<0.5 ? [i-1,i+1] : [i+1,i-1];
+    for(const j of ordem) if(j>=0 && j<lista.length && alvo(lista[j], j)) return j;
+    return -1;
+  }
+  const topo = c => c.cel[c.cel.length-1];
+
+  function choqueSolido(p, i, En){
+    const s = RX.sup, c = cols[i];
+    if(RX.modelo === 'carbono' && p.sp === 'O' && topo(c) === 'C'){
+      c.cel[c.cel.length-1] = 'Cads'; p.morto = true; calor += s.calor;
+      flash(p.x, p.y, '255,138,61'); return;
+    }
+    if(p.sp !== s.gas || topo(c) !== RX.A || c.filme) return;
+    if(En < KB*s.th || Math.random() > s.pr) return;
+    // adsorção dissociativa: a molécula se quebra sobre dois átomos de metal da superfície (o mais próximo livre)
+    let j = -1;
+    for(let d=1; d<cols.length && j<0; d++){
+      const cand = [i-d, i+d].filter(k=>k>=0 && k<cols.length && topo(cols[k]) === RX.A && !cols[k].filme);
+      if(cand.length) j = cand[Math.floor(Math.random()*cand.length)];
+    }
+    if(j < 0 && c.cel.length > 1 && c.cel[c.cel.length-2] === RX.A) j = i;   // mesmo ponto: átomo logo abaixo
+    if(j < 0) return;
+    const novo = RX.modelo === 'carbono' ? 'Cads' : RX.P;
+    if(j === i){ c.cel[c.cel.length-1] = novo; c.cel[c.cel.length-2] = novo; }
+    else { c.cel[c.cel.length-1] = novo; cols[j].cel[cols[j].cel.length-1] = novo; }
+    p.morto = true; calor += 2*s.calor;
+    flash(p.x, p.y, RX.modelo === 'carbono' ? '255,138,61' : '28,127,166', RX.modelo !== 'carbono');
+  }
+
+  function choqueCatalisador(p, i, En){
+    const k = RX.cat, s = sites[i];
+    if(s.ads) return;
+    const j = vizinhoCom(i, sites, q=>!q.ads);
+    if(j < 0) return;
+    const kT = KB*temp;
+    if(p.sp === 'H2' && Math.random() < k.prH){
+      s.ads = 'Hads'; sites[j].ads = 'Hads'; p.morto = true;
+    } else if(p.sp === 'N2' && En > KB*k.thN && Math.random() < k.prN){
+      s.ads = 'Nads'; sites[j].ads = 'Nads'; p.morto = true; flash(p.x, p.y, '53,85,200');
+    } else if(p.sp === 'NH3' && En > KB*k.thRa && Math.random() < k.prRa){
+      s.ads = 'NH2ads'; sites[j].ads = 'Hads'; p.morto = true;   // decomposição (reação inversa)
+    }
+  }
+
+  function passoSuperficie(){
+    const Ts = Tsup();
+    if(RX.modelo === 'solido'){
+      const s = RX.sup;
+      const pDes = 0.15/(1 + Math.exp(-(Ts - s.tIgn)/8));   // crosta se solta acima da ignição/fusão
+      for(const c of cols){
+        if(c.filme && Math.random() < pDes) c.filme = false;   // a película se rompe acima da ignição
+        if(topo(c) === RX.P && Math.random() < pDes){
+          c.cel.pop();
+          const q = nova(RX.P, c.x + CEL/2, H - c.cel.length*CEL - SP[RX.P].r - 2, Ts);
+          sobe(q, Ts); particles.push(q);
+        }
+      }
+    } else if(RX.modelo === 'carbono'){
+      const s = RX.sup, pDes = s.desA*Math.exp(-s.desTh/Ts);
+      for(const c of cols){
+        if(topo(c) === 'Cads' && Math.random() < pDes){
+          c.cel.pop();
+          const q = nova('CO', c.x + CEL/2, H - c.cel.length*CEL - SP.CO.r - 2, Ts);
+          sobe(q, Ts); particles.push(q);
+          calor += s.calor*0.5;
+        }
+      }
+    } else if(RX.modelo === 'catalisador' && catalisador){
+      const k = RX.cat, T = temp;
+      const pH = Math.min(1, k.Ah*Math.exp(-k.thH/T)), pDeh = Math.min(1, k.Ah*Math.exp(-(k.thH+k.thEx)/T));
+      const pDH = k.Ad*Math.exp(-k.thDH/T), pDN = k.Ad*Math.exp(-k.thDN/T);
+      const PROX = {Nads:'NHads', NHads:'NH2ads'}, ANT = {NHads:'Nads', NH2ads:'NHads'};
+      // várias varreduras por quadro: na superfície, as etapas são muito mais rápidas que a chegada do gás
+      for(let varre=0; varre<3; varre++){
+      const ordem = sites.map((_,i)=>i).sort(()=>Math.random()-0.5);
+      for(const i of ordem){
+        const s = sites[i], a = s.ads;
+        if(!a) continue;
+        const j = Math.random()<0.5 ? i-1 : i+1;
+        if(j<0 || j>=NSIT) continue;
+        const v = sites[j];
+        const grupoN = a==='Nads' || a==='NHads' || a==='NH2ads';
+        if(grupoN && v.ads==='Hads' && Math.random() < pH){
+          v.ads = null;
+          if(a === 'NH2ads'){
+            s.ads = null;
+            const q = nova('NH3', s.x + SIT/2, H - CAT_H - SP.NH3.r - 2, T); sobe(q, T);
+            particles.push(q); flash(q.x, q.y, '28,127,166', true);
+          } else s.ads = PROX[a];
+        } else if((a==='NHads' || a==='NH2ads') && !v.ads && Math.random() < pDeh){
+          s.ads = ANT[a]; v.ads = 'Hads';
+        } else if(a==='Hads' && v.ads==='Hads' && Math.random() < pDH){
+          s.ads = v.ads = null;
+          const q = nova('H2', s.x + SIT, H - CAT_H - SP.H2.r - 2, T); sobe(q, T); particles.push(q);
+        } else if(a==='Nads' && v.ads==='Nads' && Math.random() < pDN){
+          s.ads = v.ads = null;
+          const q = nova('N2', s.x + SIT, H - CAT_H - SP.N2.r - 2, T); sobe(q, T); particles.push(q);
+        } else if(!v.ads && Math.random() < (a==='Hads' ? 0.5 : 0.1)){
+          v.ads = a; s.ads = null;    // difusão na superfície
+        }
+      }
+      }
+    }
+    calor *= 0.998;                   // a superfície perde calor para o ambiente
+    if(calor < 0.5) calor = 0;
+  }
+
+  // ---------- passo de simulação ----------
+  function subpasso(){
+    const Ts = Tsup(), novas = [];
+    const piso = H;
+    for(const p of particles){
+      if(p.morto) continue;
+      p.x += p.vx; p.y += p.vy;
+      if(p.x < p.r){ p.x = p.r; paredeTermica(p, 1, 0, temp); }
+      if(p.x > wallX-p.r){ p.x = wallX-p.r; paredeTermica(p, -1, 0, temp); p.vx = -Math.abs(p.vx); }
+      if(p.y < p.r){ p.y = p.r; paredeTermica(p, 0, 1, temp); }
+      if(p.y > piso-p.r){ p.y = piso-p.r; paredeTermica(p, 0, -1, temp); }
+      // superfície sólida (colunas de átomos)
+      if(cols.length){
+        for(let i=0;i<cols.length;i++){
+          const c = cols[i]; if(!c.cel.length) continue;
+          const top = H - c.cel.length*CEL;
+          if(p.y + p.r < top || p.x + p.r < c.x || p.x - p.r > c.x + CEL) continue;
+          const cx = Math.max(c.x, Math.min(p.x, c.x+CEL)), cy = Math.max(top, Math.min(p.y, H));
+          let dx = p.x-cx, dy = p.y-cy, d = Math.hypot(dx,dy);
+          if(d >= p.r) continue;
+          if(d === 0){ dx = 0; dy = -1; d = 1; }
+          const nx = dx/d, ny = dy/d;
+          const vn = p.vx*nx + p.vy*ny;
+          p.x = cx + nx*(p.r+0.1); p.y = cy + ny*(p.r+0.1);
+          if(vn < 0){
+            if(ny < -0.6) choqueSolido(p, i, 0.5*p.m*vn*vn);
+            if(!p.morto) paredeTermica(p, nx, ny, Ts, ACOMOD_SUP);
+          }
+          if(p.morto) break;
+        }
+      }
+      // catalisador (faixa de ferro no fundo)
+      if(sites.length && catalisador && !p.morto){
+        const x0 = sites[0].x, x1 = x0 + NSIT*SIT, top = H - CAT_H;
+        if(p.y + p.r > top && p.x > x0 && p.x < x1){
+          const vn = p.vy;
+          p.y = top - p.r;
+          if(vn > 0){
+            choqueCatalisador(p, Math.min(NSIT-1, Math.floor((p.x-x0)/SIT)), 0.5*p.m*vn*vn);
+            if(!p.morto) paredeTermica(p, 0, -1, temp, ACOMOD_SUP);
+          }
+        }
+      }
+    }
+    // colisões entre partículas
+    for(let i=0;i<particles.length;i++){
+      const a = particles[i]; if(a.morto) continue;
+      for(let j=i+1;j<particles.length;j++){
+        const b = particles[j]; if(b.morto) continue;
+        const dx = b.x-a.x, dy = b.y-a.y, min = a.r+b.r;
+        if(dx > min || dx < -min || dy > min || dy < -min) continue;
+        const d = Math.hypot(dx,dy);
+        if(d >= min || d === 0) continue;
+        const nx = dx/d, ny = dy/d;
+        const dvx = b.vx-a.vx, dvy = b.vy-a.vy, vn = dvx*nx + dvy*ny;
+        const ov = (min-d), wa = b.m/(a.m+b.m), wb = a.m/(a.m+b.m);
+        a.x -= nx*ov*wa; a.y -= ny*ov*wa; b.x += nx*ov*wb; b.y += ny*ov*wb;
+        if(vn >= 0) continue;
+        const mu = a.m*b.m/(a.m+b.m);
+        const lista = RX.mapa[a.sp+'|'+b.sp];
+        if(lista){
+          const Eline = 0.5*mu*vn*vn, Erel = 0.5*mu*(dvx*dvx + dvy*dvy);
+          let ok = false;
+          for(const st of lista){
+            if(Eline > KB*st.th && Math.random() < st.pr && reagir(a, b, st, Erel, novas)){ ok = true; break; }
+          }
+          if(ok) break;
+        }
+        const J = 2*mu*vn;
+        a.vx += J/a.m*nx; a.vy += J/a.m*ny;
+        b.vx -= J/b.m*nx; b.vy -= J/b.m*ny;
+      }
+    }
+    if(novas.length) particles.push(...novas);
+    particles = particles.filter(p=>!p.morto);
+    for(const p of particles){
+      const s = Math.hypot(p.vx,p.vy);
+      if(s > VMAX){ p.vx *= VMAX/s; p.vy *= VMAX/s; }
+    }
+  }
+  function step(){
+    for(let k=0;k<SUB;k++) subpasso();
+    passoSuperficie();
+    for(const f of flashes) f.t -= 0.05;
+    flashes = flashes.filter(f=>f.t>0);
+    for(const f of faiscas) f.t -= 0.07;
+    faiscas = faiscas.filter(f=>f.t>0);
+  }
+
+  function faisca(){
+    const fx = wallX*(0.3 + Math.random()*0.4), fy = (H - alturaPiso())*(0.3 + Math.random()*0.4);
+    faiscas.push({x:fx, y:fy, t:1});
+    if(RX.modelo === 'gas'){
+      // a descarga elétrica aquece o gás e quebra algumas moléculas em radicais
+      const dist = p=>Math.hypot(p.x-fx, p.y-fy);
+      for(const [sp, prods, n] of RX.faisca.quebra){
+        const alvo = particles.filter(p=>p.sp === sp && !p.morto).sort((a,b)=>dist(a)-dist(b)).slice(0, n);
+        for(const p of alvo){
+          p.morto = true;
+          prods.forEach((q,k)=>particles.push(nova(q, p.x + (k ? 5 : -5), p.y, 2500)));
+        }
+      }
+      for(const p of particles) if(!p.morto && dist(p) < 200){ const [vx,vy] = velTermica(p.sp, 3000); p.vx = vx; p.vy = vy; }
+      particles = particles.filter(p=>!p.morto);
+    } else {
+      calor += 1000;  // chama/faísca aquece a superfície do sólido
+    }
+  }
+
+  // ---------- UI ----------
   const tempSlider = document.getElementById('tempSlider');
   const aSlider = document.getElementById('aSlider'), bSlider = document.getElementById('bSlider');
   const el = id => document.getElementById(id);
+  const solidoA = ()=> RX.modelo === 'solido' || RX.modelo === 'carbono';
+
+  // mistura duas cores hex (#RRGGBB) na proporção t
+  function mix(a, b, t){
+    const pa = parseInt(a.slice(1),16), pb = parseInt(b.slice(1),16);
+    const ch = s => Math.round(((pa>>s)&255)*(1-t) + ((pb>>s)&255)*t);
+    return 'rgb('+ch(16)+','+ch(8)+','+ch(0)+')';
+  }
+  // tons de esfera: brilho, cor base, borda sombreada
+  const TONS = {};
+  for(const k in C) TONS[k] = [mix(C[k],'#FFFFFF',0.6), C[k], mix(C[k],'#000000',0.28)];
+  // os mesmos tons como gradientes SVG, usados pela legenda
+  document.body.insertAdjacentHTML('beforeend',
+    '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>'+
+    Object.keys(TONS).map(k=>'<radialGradient id="esf-'+k+'" fx="32%" fy="30%">'+
+      '<stop offset="0" stop-color="'+TONS[k][0]+'"/><stop offset="0.5" stop-color="'+TONS[k][1]+'"/>'+
+      '<stop offset="1" stop-color="'+TONS[k][2]+'"/></radialGradient>').join('')+
+    '</defs></svg>');
+
+  const circulos = key => SP[key].parts.map(c=>({...c, sw: SP[key].r < 6 ? 0.9 : 1.3}));
 
   function renderStatic(){
-    // equação-título
     el('eqTitulo').innerHTML =
       '<span style="color:'+RX.eq[0][1]+'">'+RX.eq[0][0]+'</span><span class="seta">+</span>'+
       '<span style="color:'+RX.eq[1][1]+'">'+RX.eq[1][0]+'</span><span class="seta">⟶</span>'+
       '<span style="color:'+RX.eq[2][1]+'">'+RX.eq[2][0]+'</span>';
     el('rxSub').innerHTML = RX.sub;
-    el('eaNota').textContent = EA_TXT[RX.ea] + ' — repare em quanta temperatura esta reação exige.';
-    // legenda: mini-SVG com os mesmos círculos (parts) desenhados na caixa
-    const leg = (spec)=>{
+    el('eaNota').textContent = EA_TXT[RX.ea] + ': ' + RX.dica;
+    // legenda: mini-SVG com os mesmos círculos desenhados na caixa
+    const leg = (key)=>{
+      const lista = circulos(key);
       let x0=Infinity, y0=Infinity, x1=-Infinity, y1=-Infinity;
-      for(const c of spec.parts){
-        const e = c.r + (c.s ? 0.8 : 0) + 0.5;
+      for(const c of lista){
+        const e = c.r + (c.s ? c.sw/2 : 0) + 0.5;
         x0=Math.min(x0,c.dx-e); y0=Math.min(y0,c.dy-e);
         x1=Math.max(x1,c.dx+e); y1=Math.max(y1,c.dy+e);
       }
       const w = x1-x0, h = y1-y0, esc = 0.85;
-      const circ = spec.parts.map(c=>'<circle cx="'+c.dx+'" cy="'+c.dy+'" r="'+c.r+'" fill="'+C[c.f]+'"'+
-        (c.s ? ' stroke="'+C[c.s]+'" stroke-width="1.6"' : '')+'/>').join('');
-      return '<span><svg viewBox="'+x0+' '+y0+' '+w+' '+h+'" width="'+(w*esc).toFixed(1)+'" height="'+(h*esc).toFixed(1)+'" aria-hidden="true">'+circ+'</svg>'+spec.label+'</span>';
+      const circ = lista.map(c=>'<circle cx="'+c.dx+'" cy="'+c.dy+'" r="'+c.r+'" fill="url(#esf-'+c.f+')"'+
+        (c.s ? ' stroke="'+C[c.s]+'" stroke-width="'+c.sw+'"' : '')+'/>').join('');
+      const rot = SP[key].label + (solidoA() && key===RX.A ? ' (sólido)' : '');
+      return '<span><svg viewBox="'+x0+' '+y0+' '+w+' '+h+'" width="'+(w*esc).toFixed(1)+'" height="'+(h*esc).toFixed(1)+'" aria-hidden="true">'+circ+'</svg>'+rot+'</span>';
     };
-    el('legenda').innerHTML = leg(RX.A)+leg(RX.B)+leg(RX.P);
-    // sliders e contadores
-    el('aLabel').textContent = RX.A.nome;
-    el('bLabel').textContent = RX.B.nome;
+    el('legenda').innerHTML = RX.leg.map(leg).join('');
+    el('aLabel').textContent = RX.nomeA;
+    el('bLabel').textContent = RX.nomeB;
     aSlider.max = RX.maxA; bSlider.max = RX.maxB;
-    el('rotA').textContent = RX.A.label+' restante';
-    el('rotB').textContent = RX.B.label+' restante';
-    el('rotP').textContent = RX.P.nome;
+    el('rotA').textContent = SP[RX.A].label+' restante';
+    el('rotB').textContent = SP[RX.B].label+' restante';
+    el('rotP').textContent = RX.nomeP;
+    el('btnFaisca').hidden = !RX.faisca;
+    el('ctrlCat').hidden = RX.modelo !== 'catalisador';
+    el('btnCat').textContent = catalisador ? 'Ligado' : 'Desligado';
+    el('btnCat').setAttribute('aria-pressed', catalisador);
   }
 
   function reset(toDefaults){
-    particles = []; flashes = []; formed = 0; history = []; tick = 0;
+    particles = []; flashes = []; faiscas = []; history = []; tick = 0; calor = 0; tgSuave = temp;
+    cols = []; sites = [];
     if(toDefaults){ aSlider.value = RX.defA; bSlider.value = RX.defB; }
     el('aVal').textContent = aSlider.value; el('bVal').textContent = bSlider.value;
-    for(let i=0;i<+aSlider.value;i++) particles.push(spawn('A'));
-    for(let i=0;i<+bSlider.value;i++) particles.push(spawn('B'));
+    if(solidoA()) montarSolido(+aSlider.value);
+    if(RX.modelo === 'catalisador') montarSitios();
+    if(!solidoA()) for(let i=0;i<+aSlider.value;i++) particles.push(spawnGas(RX.A));
+    for(let i=0;i<+bSlider.value;i++) particles.push(spawnGas(RX.B));
   }
 
   // ---------- eventos ----------
   tempSlider.addEventListener('input', ()=>{
-    const oldT = temp; temp = +tempSlider.value;
+    const k = Math.sqrt(+tempSlider.value/temp);   // aquecer/resfriar o recipiente leva o gás junto
+    temp = +tempSlider.value;
+    for(const p of particles){ p.vx *= k; p.vy *= k; }
+    tgSuave *= k*k;
     el('tempVal').textContent = temp;
-    const k = Math.pow(temp/oldT, 0.85);
-    for(const p of particles){ p.vx*=k; p.vy*=k; }
+  });
+  const volSlider = el('volSlider');
+  volSlider.addEventListener('input', ()=>{
+    vol = +volSlider.value/100; wallX = W*vol;
+    el('volVal').textContent = (2*vol).toFixed(1);
+    alinharBloco();
   });
   function syncCount(slider, kind, valId){
-    const desired = +slider.value; let atual = count(kind);
-    while(atual < desired){ particles.push(spawn(kind)); atual++; }
-    while(atual > desired){
-      const idx = particles.findIndex(p=>p.kind===kind && p.absorbed===0);
-      if(idx<0) break;
-      particles.splice(idx,1); atual--;
+    const sp = RX[kind], desired = +slider.value;
+    if(kind === 'A' && solidoA()){
+      montarSolido(desired); calor = 0;
+    } else {
+      let atual = conta(sp);
+      while(atual < desired){ particles.push(spawnGas(sp)); atual++; }
+      while(atual > desired){
+        const idx = particles.findIndex(p=>p.sp===sp);
+        if(idx<0) break;
+        particles.splice(idx,1); atual--;
+      }
+      slider.value = conta(sp);
     }
-    slider.value = count(kind);
     el(valId).textContent = slider.value;
   }
   aSlider.addEventListener('input', ()=>syncCount(aSlider,'A','aVal'));
   bSlider.addEventListener('input', ()=>syncCount(bSlider,'B','bVal'));
   el('btnReset').addEventListener('click', ()=>reset(false));
+  el('btnFaisca').addEventListener('click', faisca);
+  el('btnCat').addEventListener('click', ()=>{ catalisador = !catalisador; renderStatic(); reset(false); });
   const btnPausa = el('btnPausa');
   btnPausa.addEventListener('click', ()=>{ paused=!paused; btnPausa.textContent = paused?'Continuar':'Pausar'; });
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches){ paused=true; btnPausa.textContent='Continuar'; }
@@ -384,147 +841,219 @@
     const card = e.target.closest('.rx-card');
     if(!card) return;
     RX = REACTIONS.find(r=>r.id===card.dataset.id);
+    catalisador = false;
     renderStatic(); reset(true); fecharModal();
   });
 
-  // ---------- física ----------
-  function step(){
-    const tgt = targetSpeed();
-    for(const p of particles){
-      const s = Math.hypot(p.vx,p.vy) || 0.001;
-      const f = 1 + 0.15*((tgt*(0.8+Math.random()*0.4))/s - 1);
-      p.vx*=f; p.vy*=f;
-      p.x+=p.vx; p.y+=p.vy;
-      if(p.x<p.r){p.x=p.r;p.vx*=-1} if(p.x>W-p.r){p.x=W-p.r;p.vx*=-1}
-      if(p.y<p.r){p.y=p.r;p.vy*=-1} if(p.y>H-p.r){p.y=H-p.r;p.vy*=-1}
-    }
-    for(let i=0;i<particles.length;i++){
-      for(let j=i+1;j<particles.length;j++){
-        const a=particles[i], b=particles[j];
-        const dx=b.x-a.x, dy=b.y-a.y;
-        const dist=Math.hypot(dx,dy), min=a.r+b.r;
-        if(dist>=min || dist===0) continue;
-
-        const kinds = a.kind+b.kind;
-        if((kinds==='AB'||kinds==='BA')){
-          const rvx=b.vx-a.vx, rvy=b.vy-a.vy;
-          if(rvx*rvx+rvy*rvy > RX.act && Math.random()<0.6){
-            const pa = a.kind==='A'?a:b, hub = a.kind==='A'?b:a;
-            particles.splice(particles.indexOf(pa),1);
-            hub.absorbed++;
-            flashes.push({x:hub.x,y:hub.y,t:1});
-            if(hub.absorbed >= RX.need){
-              hub.kind='P'; hub.r=RX.P.r; hub.absorbed=0;
-              formed++;
-              for(let k=1;k<RX.yld;k++){
-                const nova = spawn('P');
-                nova.x = Math.min(W-nova.r, Math.max(nova.r, hub.x + (Math.random()*30-15)));
-                nova.y = Math.min(H-nova.r, Math.max(nova.r, hub.y + (Math.random()*30-15)));
-                particles.push(nova);
-                formed++;
-              }
-            }
-            continue;
-          }
-        }
-        // colisão elástica
-        const nx=dx/dist, ny=dy/dist;
-        const p1=a.vx*nx+a.vy*ny, p2=b.vx*nx+b.vy*ny;
-        a.vx+=(p2-p1)*nx; a.vy+=(p2-p1)*ny;
-        b.vx+=(p1-p2)*nx; b.vy+=(p1-p2)*ny;
-        const ov=(min-dist)/2;
-        a.x-=nx*ov; a.y-=ny*ov; b.x+=nx*ov; b.y+=ny*ov;
-      }
-    }
-    for(const f of flashes) f.t-=0.05;
-    flashes = flashes.filter(f=>f.t>0);
-  }
-
   // ---------- desenho ----------
-  function drawSpec(p, spec){
-    for(const c of spec.parts){
-      ctx.fillStyle = C[c.f];
-      ctx.beginPath(); ctx.arc(p.x+c.dx, p.y+c.dy, c.r, 0, Math.PI*2); ctx.fill();
-      if(c.s){ ctx.strokeStyle = C[c.s]; ctx.lineWidth = 1.6; ctx.stroke(); }
+  function esfera(x, y, c, esc){
+    const r = c.r*esc, t = TONS[c.f];
+    const g = ctx.createRadialGradient(x-r*0.35, y-r*0.4, r*0.1, x, y, r);
+    g.addColorStop(0, t[0]); g.addColorStop(0.5, t[1]); g.addColorStop(1, t[2]);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+    if(c.s){ ctx.strokeStyle = C[c.s]; ctx.lineWidth = SP_MIN(r); ctx.stroke(); }
+  }
+  const SP_MIN = r => r < 5 ? 0.9 : 1.3;
+  function desenhaEspecie(key, x, y, esc){
+    for(const c of SP[key].parts) esfera(x + c.dx*esc, y + c.dy*esc, c, esc);
+  }
+  function drawFundo(){
+    // fundo esfria/esquenta de leve com a temperatura das paredes
+    const k = Math.max(0, Math.min(1, (temp-120)/880));
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0, mix('#F7FBFD','#FFF4EC',k));
+    g.addColorStop(1, mix('#E9F2F6','#FBE4D6',k));
+    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = 'rgba(15,42,51,0.07)';
+    for(let x=19; x<W; x+=38) for(let y=19; y<H; y+=38){ ctx.fillRect(x-1,y-1,2,2); }
+  }
+  function drawPistao(){
+    if(wallX >= W-0.5) return;
+    ctx.fillStyle = 'rgba(94,118,129,0.14)';
+    ctx.fillRect(wallX, 0, W-wallX, H);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(wallX, 0, W-wallX, H); ctx.clip();
+    ctx.strokeStyle = 'rgba(94,118,129,0.22)'; ctx.lineWidth = 1;
+    for(let d=-H; d<W; d+=14){ ctx.beginPath(); ctx.moveTo(d,H); ctx.lineTo(d+H,0); ctx.stroke(); }
+    ctx.restore();
+    ctx.fillStyle = '#8A9CA5'; ctx.fillRect(wallX+8, H/2-5, W-wallX-8, 10);
+    const g = ctx.createLinearGradient(wallX,0,wallX+10,0);
+    g.addColorStop(0,'#4A6570'); g.addColorStop(1,'#2C4652');
+    ctx.fillStyle = g; ctx.fillRect(wallX, 0, 10, H);
+  }
+  function drawBrilho(x, y, raio, cor, alfa){
+    if(alfa <= 0.01) return;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, raio);
+    const rgb = parseInt(cor.slice(1),16);
+    const c = ((rgb>>16)&255)+','+((rgb>>8)&255)+','+(rgb&255);
+    g.addColorStop(0, 'rgba('+c+','+alfa+')'); g.addColorStop(1, 'rgba('+c+',0)');
+    ctx.fillStyle = g; ctx.fillRect(x-raio, y-raio, 2*raio, 2*raio);
+  }
+  function drawSolido(){
+    if(!cols.length) return;
+    const Ts = Tsup(), x0 = cols[0].x, largura = cols.length*CEL;
+    const acesa = RX.modelo === 'carbono' ? (Ts-600)/500 : (Ts - RX.sup.tIgn)/400;
+    drawBrilho(x0 + largura/2, H - 20, largura*0.9, RX.brilho, Math.min(0.75, acesa));
+    for(const c of cols){
+      c.cel.forEach((k,n)=>{
+        const x = c.x + CEL/2, y = H - n*CEL - CEL/2;
+        desenhaEspecie(k, x, y, k===RX.A || k==='Cads' ? 1 : 0.72);
+      });
+      if(c.filme && c.cel.length){ ctx.fillStyle = 'rgba(236,240,242,0.9)'; ctx.fillRect(c.x, H - c.cel.length*CEL - 2, CEL, 3); ctx.fillStyle = 'rgba(160,90,60,0.55)'; ctx.fillRect(c.x, H - c.cel.length*CEL + 1, CEL, 1); }
+    }
+  }
+  function drawCatalisador(){
+    if(!sites.length || !catalisador) return;
+    for(const s of sites){
+      const x = s.x + SIT/2;
+      esfera(x, H - CAT_H/2, SP.Fe.parts[0], 1);
+      if(s.ads) desenhaEspecie(s.ads, x, H - CAT_H - 4, 1);
     }
   }
   function draw(){
-    ctx.clearRect(0,0,W,H);
-    for(const f of flashes){
-      ctx.beginPath();
-      ctx.arc(f.x,f.y,18*(1-f.t)+6,0,Math.PI*2);
-      ctx.strokeStyle='rgba(28,127,166,'+(f.t*0.8)+')';
-      ctx.lineWidth=2.5; ctx.stroke();
+    drawFundo();
+    drawPistao();
+    drawSolido();
+    drawCatalisador();
+    // brilho da chama no gás quente
+    if(RX.modelo === 'gas'){
+      const tg = tempGas();
+      drawBrilho(wallX/2, H/2, Math.max(wallX,H)*0.7, RX.brilho, Math.min(0.35, (tg - 900)/3000));
     }
-    for(const p of particles){
-      drawSpec(p, RX[p.kind]);
-      if(p.kind==='B' && p.absorbed>0){
-        // indicador do intermediário: pontinhos do reagente A capturado
-        const fill = C[RX.A.parts[0].f];
-        for(let k=0;k<p.absorbed;k++){
-          const ang = -Math.PI/2 + k*0.9;
-          ctx.fillStyle = fill;
-          ctx.beginPath();
-          ctx.arc(p.x + Math.cos(ang)*(p.r+4), p.y + Math.sin(ang)*(p.r+4), 3.5, 0, Math.PI*2);
-          ctx.fill();
-          ctx.strokeStyle = C.hydLine; ctx.lineWidth=1; ctx.stroke();
-        }
+    for(const f of flashes){
+      const r = (f.forte ? 20 : 12)*(1-f.t)+5;
+      const g = ctx.createRadialGradient(f.x,f.y,0,f.x,f.y,r);
+      g.addColorStop(0,'rgba('+f.cor+','+(f.t*0.28)+')'); g.addColorStop(1,'rgba('+f.cor+',0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(f.x,f.y,r,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='rgba('+f.cor+','+(f.t*(f.forte ? 0.85 : 0.5))+')';
+      ctx.lineWidth = f.forte ? 2.5 : 1.5; ctx.stroke();
+    }
+    for(const p of particles) desenhaEspecie(p.sp, p.x, p.y, 1);
+    for(const f of faiscas){
+      drawBrilho(f.x, f.y, 90, '#FFD34D', f.t*0.8);
+      ctx.strokeStyle = 'rgba(201,138,18,'+f.t+')'; ctx.lineWidth = 2;
+      for(let k=0;k<6;k++){
+        const a = k*Math.PI/3 + f.t;
+        ctx.beginPath(); ctx.moveTo(f.x, f.y);
+        ctx.lineTo(f.x + Math.cos(a)*18 + 6, f.y + Math.sin(a)*18 - 6);
+        ctx.lineTo(f.x + Math.cos(a)*36, f.y + Math.sin(a)*36);
+        ctx.stroke();
       }
     }
   }
 
   // ---------- painel ----------
+  function tempGas(){
+    let e = 0, n = 0;
+    for(const p of particles){ e += 0.5*p.m*(p.vx*p.vx + p.vy*p.vy); n++; }
+    return n ? e/n/KB : temp;
+  }
+  function atomosLivres(){
+    // átomos de cada elemento ainda fora do produto (gás, sólido e adsorvidos)
+    const tot = {};
+    const soma = key => { if(key === RX.P) return; const at = SP[key].at; for(const e in at) tot[e] = (tot[e]||0) + at[e]; };
+    for(const p of particles) soma(p.sp);
+    for(const c of cols) c.cel.forEach(soma);
+    for(const s of sites) if(s.ads) soma(s.ads);
+    return tot;
+  }
   function updatePanel(){
-    const nA = count('A'), nB = count('B');
+    const nA = solidoA() ? cols.reduce((n,c)=>n + c.cel.filter(k=>k===RX.A).length, 0) : conta(RX.A);
+    const nB = conta(RX.B);
+    const nP = conta(RX.P) + cols.reduce((n,c)=>n + c.cel.filter(k=>k===RX.P).length, 0);
     el('cA').textContent = nA;
     el('cB').textContent = nB;
-    el('cP').textContent = formed;
+    el('cP').textContent = nP;
 
-    const press = (particles.length * temp) / (19 * 400);
+    tgSuave += (tempGas() - tgSuave)*0.015;
+    const tg = tgSuave;
+    el('tGas').textContent = 'Gás agora: '+Math.round(tg)+' K' +
+      (solidoA() ? ' · superfície: '+Math.round(Tsup())+' K' : '');
+
+    const area = wallX*H - cols.reduce((a,c)=>a + c.cel.length*CEL*CEL, 0);
+    const press = (particles.length*tg) / (19*400) * (W*H/area);
     el('pressVal').textContent = press.toFixed(2)+' atm';
     el('pressFill').style.width = Math.min(100, press*30)+'%';
 
-    // previsão: hubs parciais primeiro (precisam de menos A pra completar)
-    const hubs = particles.filter(p=>p.kind==='B').map(h=>RX.need - h.absorbed).sort((x,y)=>x-y);
-    let freeA = nA, completos = 0;
-    for(const falta of hubs){ if(freeA >= falta){ freeA -= falta; completos++; } else break; }
-    const adicionais = completos * RX.yld;
-    const pv = el('previsao');
-    if(nA===0 && nB===0){
-      pv.innerHTML = 'Reação completa: todos os reagentes foram consumidos.';
-    } else if(adicionais===0 && nA>0 && nB===0){
-      pv.innerHTML = '<strong>'+RX.B.label+' foi o reagente limitante.</strong> Sobraram '+nA+' de '+RX.A.label+' em excesso.';
-    } else if(adicionais===0 && nB>0){
-      pv.innerHTML = '<strong>'+RX.A.label+' é o reagente limitante.</strong> Sobra '+RX.B.label+' em excesso — nenhum produto a mais pode se formar.';
+    // intermediários visíveis
+    let it = '';
+    if(RX.modelo === 'gas' || RX.modelo === 'carbono'){
+      const partes = (RX.inter||[]).map(k=>[SP[k].label, conta(k)]).filter(x=>x[1]>0);
+      if(RX.modelo === 'carbono'){
+        const ads = cols.reduce((n,c)=>n + c.cel.filter(k=>k==='Cads').length, 0);
+        if(ads) partes.push(['C–O na superfície', ads]);
+      }
+      it = partes.length ? '<b>Intermediários agora:</b> '+partes.map(x=>x[0]+' '+x[1]).join(' · ')
+                         : 'Nenhum intermediário no momento.';
+    } else if(RX.modelo === 'solido'){
+      const crosta = cols.reduce((n,c)=>n + (topo(c)===RX.P), 0), filme = cols.reduce((n,c)=>n + !!(c.filme && c.cel.length), 0);
+      it = filme ? '<b>Película de óxido</b> protegendo '+filme+' de '+cols.length+' pontos: aqueça acima de ~'+RX.sup.tIgn+' K ou use a faísca.' : crosta ? '<b>Crosta de '+SP[RX.P].label+'</b> cobrindo '+crosta+' de '+cols.length+' pontos da superfície.'
+                  : 'Superfície do metal exposta.';
     } else {
-      const sobraA = freeA>0;
-      const lim = sobraA ? RX.B.label : (hubs.length>completos ? RX.A.label : 'nenhum (proporção exata)');
-      pv.innerHTML = 'Com o que resta, ainda podem se formar <strong>'+adicionais+'</strong> de '+RX.P.label+'. Reagente limitante: <strong>'+lim+'</strong>.';
+      if(!catalisador) it = 'Sem catalisador: N₂ e H₂ só colidem e se afastam.';
+      else {
+        const n = {}; for(const s of sites) if(s.ads) n[s.ads] = (n[s.ads]||0)+1;
+        const partes = ['Nads','NHads','NH2ads','Hads'].filter(k=>n[k]).map(k=>SP[k].label+' '+n[k]);
+        it = '<b>Adsorvidos no ferro:</b> '+(partes.length ? partes.join(' · ') : 'nenhum');
+      }
     }
+    el('interm').innerHTML = it;
+
+    // previsão pelo balanço de átomos
+    const livres = atomosLivres(), Pat = SP[RX.P].at;
+    let pot = Infinity, lim = null;
+    for(const e in Pat){
+      const q = Math.floor((livres[e]||0)/Pat[e]);
+      if(q < pot){ pot = q; lim = e; }
+    }
+    const nomeLim = SP[RX[RX.elem[lim]]].label;
+    const outro = Object.keys(Pat).find(e=>e!==lim);
+    const nomeOutro = SP[RX[RX.elem[outro]]].label;
+    const pv = el('previsao');
+    let txt;
+    if(!Object.keys(livres).length){
+      txt = 'Reação completa: todos os reagentes foram consumidos.';
+    } else if(pot === 0){
+      txt = '<strong>'+nomeLim+' é o reagente limitante.</strong> O que sobra de '+nomeOutro+' está em excesso — nenhum produto a mais pode se formar.';
+    } else {
+      txt = 'Com o que resta, ainda podem se formar <strong>'+pot+'</strong> de '+SP[RX.P].label+'. Reagente limitante: <strong>'+nomeLim+'</strong>.';
+    }
+    if(RX.reversivel && catalisador) txt += ' Reação reversível: chega ao equilíbrio antes de consumir tudo.';
+    if(RX.id === 'co2' && conta('CO') > 0 && nB === 0) txt += ' Sobrou CO: combustão incompleta por falta de O₂.';
+    if(RX.id === 'agua' && pot > 0 && nP === 0 && tg < 850 && !(RX.inter.some(k=>conta(k)>0)))
+      txt += ' Nada acontece sem ignição: use a faísca ou aqueça acima de ~850 K.';
+    pv.innerHTML = txt;
+    return nP;
   }
 
   function drawGraph(){
-    const w=gcv.width, h=gcv.height;
+    const w=GW, h=GH;
     gctx.clearRect(0,0,w,h);
     gctx.strokeStyle='#D5E0E4'; gctx.lineWidth=1;
     gctx.beginPath(); gctx.moveTo(0,h-1); gctx.lineTo(w,h-1); gctx.stroke();
     if(history.length<2) return;
     const maxY = Math.max(4, Math.max(...history));
-    gctx.strokeStyle=C.water; gctx.lineWidth=2;
     gctx.beginPath();
     history.forEach((v,i)=>{
       const x=i/(history.length-1)*w, y=h-2-(v/maxY)*(h-8);
       i===0?gctx.moveTo(x,y):gctx.lineTo(x,y);
     });
+    gctx.strokeStyle=C.water; gctx.lineWidth=2; gctx.lineJoin='round';
     gctx.stroke();
+    gctx.lineTo(w,h-1); gctx.lineTo(0,h-1); gctx.closePath();
+    const g = gctx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,'rgba(28,127,166,0.28)'); g.addColorStop(1,'rgba(28,127,166,0.02)');
+    gctx.fillStyle = g; gctx.fill();
   }
 
   function loop(){
-    if(!paused){
-      step(); tick++;
-      if(tick%12===0){ history.push(formed); if(history.length>140) history.shift(); }
-    }
-    draw(); updatePanel(); drawGraph();
+    if(!paused){ step(); tick++; }
+    draw();
+    const nP = updatePanel();
+    if(!paused && tick%12===0){ history.push(nP); if(history.length>140) history.shift(); }
+    drawGraph();
     requestAnimationFrame(loop);
   }
 
